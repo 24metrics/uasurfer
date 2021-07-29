@@ -1,3 +1,8 @@
+//go:generate enumer -type=DeviceType -json -bson -sql
+//go:generate enumer -type=BrowserName -json -bson -sql
+//go:generate enumer -type=OSName -json -bson -sql
+//go:generate enumer -type=Platform -json -bson -sql
+
 // Package uasurfer provides fast and reliable abstraction
 // of HTTP User-Agent strings. The philosophy is to identify
 // technologies that holds >1% market share, and to avoid
@@ -5,7 +10,13 @@
 // strings.
 package uasurfer
 
-import "strings"
+import (
+	"database/sql/driver"
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"strings"
+)
 
 //go:generate stringer -type=DeviceType,BrowserName,OSName,Platform -output=const_string.go
 
@@ -138,6 +149,91 @@ type Version struct {
 	Major int
 	Minor int
 	Patch int
+}
+
+func (v Version) String() string {
+	return fmt.Sprintf("%d.%d.%d", v.Major, v.Minor, v.Patch)
+}
+
+// Value to make the Version type implement the sql/driver.Valuer
+func (v Version) Value() (driver.Value, error) {
+	return v.String(), nil
+}
+
+// Scan to make the Version type implement the sql/driver.Scanner
+func (v *Version) Scan(src interface{}) error {
+	// Version zero value.
+	if src == nil {
+		*v = Version{}
+		return nil
+	}
+	sv, err := driver.String.ConvertValue(src)
+	if err != nil {
+		return fmt.Errorf("could not convert value %v to driver.String", src)
+	}
+	// Check if the value is a string type.
+	str, ok := sv.(string)
+	if !ok {
+		return fmt.Errorf("could not parse to type Version: value %v is not a string", sv)
+	}
+	version, err := ParseStringVersion(str)
+	if err != nil {
+		return err
+	}
+	*v = version
+	return nil
+}
+
+// MarshalJSON implements the json.Marshaler interface for BrowserName
+func (v Version) MarshalJSON() ([]byte, error) {
+	return json.Marshal(v.String())
+}
+
+// UnmarshalJSON implements the json.Unmarshaler interface for BrowserName
+func (v *Version) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return fmt.Errorf("Version should be a string, got %s", data)
+	}
+
+	var err error
+	*v, err = ParseStringVersion(s)
+	return err
+}
+
+func ParseStringVersion(version string) (Version, error) {
+	var (
+		err           error
+		parsedVersion Version
+	)
+
+	if len(version) == 0 {
+		return parsedVersion, nil
+	}
+
+	// remove v from semver
+	version = strings.Replace(version, "v", "", -1)
+
+	dots := strings.Count(version, ".")
+	version += strings.Repeat(".0", 2-dots)
+	vs := strings.Split(version, ".")
+
+	parsedVersion.Major, err = strconv.Atoi(vs[0])
+	if err != nil {
+		return parsedVersion, err
+	}
+
+	parsedVersion.Minor, err = strconv.Atoi(vs[1])
+	if err != nil {
+		return parsedVersion, err
+	}
+
+	parsedVersion.Patch, err = strconv.Atoi(vs[2])
+	if err != nil {
+		return parsedVersion, err
+	}
+
+	return parsedVersion, nil
 }
 
 func (v Version) Less(c Version) bool {
