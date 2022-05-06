@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	amazonFireFingerprint = regexp.MustCompile("\\s(k[a-z]{3,5}|sd\\d{4}ur)\\s") //tablet or phone
+	amazonFireFingerprint = regexp.MustCompile("\\s(k[a-z]{3,5}|sd\\d{4}ur)\\s") // tablet or phone
 )
 
 func (u *UserAgent) evalOS(ua string) bool {
@@ -30,7 +30,7 @@ func (u *UserAgent) evalOS(ua string) bool {
 		specs = agentPlatform
 	}
 
-	//strict OS & version identification
+	// strict OS & version identification
 	switch {
 	case specs == "android":
 		u.evalLinux(ua, agentPlatform)
@@ -56,7 +56,7 @@ func (u *UserAgent) evalOS(ua string) bool {
 			u.OS.Name = OSBlackberry
 
 		// Windows Phone
-		case strings.Contains(agentPlatform, "windows phone "):
+		case strings.Contains(agentPlatform, "windows phone ") && !strings.Contains(agentPlatform, "xbox "):
 			u.evalWindowsPhone(agentPlatform)
 
 		// Windows, Xbox
@@ -198,7 +198,7 @@ func (u *UserAgent) evalWindowsPhone(agentPlatform string) {
 func (u *UserAgent) evalWindows(ua string) {
 
 	switch {
-	//Xbox -- it reads just like Windows
+	// Xbox -- it reads just like Windows
 	case strings.Contains(ua, "xbox"):
 		u.OS.Platform = PlatformXbox
 		u.OS.Name = OSXbox
