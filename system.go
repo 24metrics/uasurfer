@@ -11,6 +11,14 @@ var (
 )
 
 func (u *UserAgent) evalOS(ua string) bool {
+	// This is a subjective parsing for cfnetwork user agents.
+	// For us, we consider this as iOS from in-app browsers.
+	if strings.Contains(ua, "cfnetwork/") {
+		u.OS.Platform = PlatformUnknown
+		u.OS.Name = OSiOS
+		return u.maybeBot()
+	}
+
 	s := strings.IndexRune(ua, '(')
 	e := strings.IndexRune(ua, ')')
 	if s > e {

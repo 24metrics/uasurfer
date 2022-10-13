@@ -32,6 +32,12 @@ func (u *UserAgent) evalBrowserName(ua string) bool {
 		return u.maybeBot()
 	}
 
+	// https://user-agents.net/string/cfnetwork-1126-darwin-19-5-0
+	if strings.Contains(ua, "cfnetwork/") {
+		u.Browser.Name = BrowserUnknown
+		return u.maybeBot()
+	}
+
 	if strings.Contains(ua, "applewebkit") {
 		switch {
 		case strings.Contains(ua, "googlebot"):
