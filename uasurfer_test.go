@@ -990,27 +990,15 @@ var testUAVars = []struct {
 		},
 	},
 	{
-		"trustd (unknown version) CFNetwork/811.7.2 Darwin/16.7.0 (x86_64)",
+		"My Talking Tom 2/3.5.1.3126 CFNetwork/1335.0.3 Darwin/21.6.0 ",
 		UserAgent{
 			Browser{
 				BrowserUnknown, Version{0, 0, 0},
 			},
 			OS{
-				PlatformMac, OSUnknown, Version{0, 0, 0},
+				PlatformUnknown, OSiOS, Version{0, 0, 0},
 			},
-			DeviceComputer,
-		},
-	},
-	{
-		"ocspd (unknown version) CFNetwork/520.5.3 Darwin/11.4.2 (x86_64)(MacBookAir5%2C2)",
-		UserAgent{
-			Browser{
-				BrowserUnknown, Version{0, 0, 0},
-			},
-			OS{
-				PlatformMac, OSUnknown, Version{0, 0, 0},
-			},
-			DeviceComputer,
+			DeviceUnknown,
 		},
 	},
 	// Bots
