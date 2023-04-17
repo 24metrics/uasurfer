@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	amazonFireFingerprint = regexp.MustCompile("\\s(k[a-z]{3,5}|sd\\d{4}ur)\\s") //tablet or phone
+	amazonFireFingerprint = regexp.MustCompile(`\s(k[a-z]{3,5}|sd\d{4}ur)\s`) //tablet or phone
 )
 
 func (u *UserAgent) evalOS(ua string) bool {
@@ -255,9 +255,31 @@ func (u *UserAgent) evalMacintosh(uaPlatformGroup string) {
 	u.OS.Name = OSUnknown
 }
 
-func (v *Version) findVersionNumber(s string, m string) bool {
-	if ind := strings.Index(s, m); ind != -1 {
-		return v.parse(s[ind+len(m):])
+func (v *Version) findVersionNumber(s string, versionPrefix string) bool {
+	if ind := strings.Index(s, versionPrefix); ind != -1 {
+		// Given `s` as "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.101.5 Safari/537.36",
+		// and `versionPrefix` as "Chrome/",
+		// then `ind` is 75,
+		// then `s[ind+len(versionPrefix):]` will become "30.0.1599.101.5 Safari/537.36"
+		versionString := s[ind+len(versionPrefix):]
+		// Trim any words after the version number.
+		// For example, given "30.0.1599.101.5 Safari/537.36", we want to trim it to "30.0.1599.101.5"
+		{
+			ss := strings.Split(versionString, " ")
+			if len(ss) > 0 {
+				versionString = ss[0]
+			}
+		}
+		// Trim the version string of any trailing characters that are not part of the version number
+		versionString = strings.TrimRight(versionString, ":;.,/\\")
+		{
+			ss := strings.Split(versionString, ".")
+			// If there are more than 3 parts to the version number, then the last part is the label.
+			if len(ss) > 3 {
+				v.Extra = strings.Join(ss[3:], ".")
+			}
+		}
+		return v.parse(versionString)
 	}
 	return false
 }
@@ -285,31 +307,42 @@ func strToInt(str string) int {
 	return i
 }
 
-// strToVer accepts a string and returns a Version,
-// with {0, 0, 0} being default.
+// parse accepts a string and returns a Version,
+// with {0, 0, 0, ""} being default.
 func (v *Version) parse(str string) bool {
+	// This checks if the string is empty or if the first character of the string is not a digit.
 	if len(str) == 0 || str[0] < '0' || str[0] > '9' {
 		return false
 	}
+
+	// This is a for loop that iterates three times, with i starting from 0 and incrementing by 1 each time.
+	// Within this loop, another for loop is started that iterates over each character c in the str string, along with its index k.
 	for i := 0; i < 3; i++ {
 		empty := true
 		val := 0
-		l := len(str) - 1
+		strLen := len(str) - 1
 
 		for k, c := range str {
+			// If the current character c is a digit, then the if empty block is executed.
+			// If empty is true, val is set to the numeric value of c and empty is set to false.
 			if c >= '0' && c <= '9' {
 				if empty {
 					val = int(c) - 48
 					empty = false
-					if k == l {
+					// If the current character is the last character in the string, then the str variable is set to an empty string.
+					if k == strLen {
 						str = str[:0]
 					}
 					continue
 				}
+				// then str is set to the substring starting from index k,
+				// and the loop is exited using the break statement.
 
+				// If val is zero and the current character is 0.
 				if val == 0 {
 					if c == '0' {
-						if k == l {
+						// If the current character is the last character in the string, then str is set to an empty string.
+						if k == strLen {
 							str = str[:0]
 						}
 						continue
@@ -318,12 +351,19 @@ func (v *Version) parse(str string) bool {
 					break
 				}
 
+				// If val is not zero and the current character is a digit,
+				// then val is updated by multiplying it by 10 and adding the numeric value of the current character.
 				val = 10*val + int(c) - 48
-				if k == l {
+				// If the current character is the last character in the string,
+				// then str is set to an empty string.
+				if k == strLen {
 					str = str[:0]
 				}
 				continue
 			}
+
+			// From here, the current character is not a digit.
+			// Else, the str is set to the substring starting from index k+1,
 			str = str[k+1:]
 			break
 		}
@@ -339,5 +379,6 @@ func (v *Version) parse(str string) bool {
 			v.Patch = val
 		}
 	}
+
 	return true
 }

@@ -1,0 +1,58 @@
+version: 2.1
+jobs:
+  build:
+    docker:
+      - image: eu.gcr.io/fraudshield-207318/circle-golang:latest
+        auth:
+          username: _json_key
+          password: $GCLOUD_SERVICE_KEY
+    environment:
+      TEST_RESULTS: /tmp/test-results # path to where test results will be saved
+    steps:
+      - run:
+          name: Git setup
+          command: |
+            # use http api token to fetch private repos
+            git config --global url."https://${GITHUB_API_TOKEN}:x-oauth-basic@github.com/24metrics".insteadOf "https://github.com/24metrics"
+
+      - checkout
+
+      - run:
+          name: Download Dependencies
+          command: |
+            go mod tidy
+
+      - restore_cache: # restores saved cache if no changes are detected since last run
+          keys:
+            - go-mod-v4-{{ checksum "go.sum" }}
+
+      - run:
+          name: Lint
+          command: |
+            golangci-lint run -v ./...  -D unused
+
+      - run:
+          name: Test 
+          command: |
+            go test -v ./...
+
+      - save_cache:
+          key: go-mod-v4-{{ checksum "go.sum" }}
+          paths:
+            - "/go/pkg/mod"
+
+      - store_artifacts: # upload test summary for display in Artifacts
+          path: /tmp/test-results
+          destination: raw-test-output
+
+      - store_test_results: # upload test results for display in Test Summary
+          path: /tmp/test-results
+
+workflows:
+  pipeline:
+    jobs:
+    - build:
+        context: clickshield-vars
+        filters:
+          tags:
+            only: /^v\d+\.\d+\.\d.*/
