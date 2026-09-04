@@ -58,3 +58,8 @@ Thumbs.db
 # _test.go file, not in a generated seed file: see TestVersionParseOverflow,
 # which is what FuzzParse found here.
 testdata/fuzz/
+.idea/
+
+# Reference corpora downloaded by cmd/uacompare.
+testdata/matomo/
+testdata/uap-core/

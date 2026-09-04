@@ -467,10 +467,14 @@ func (u *UserAgent) IsBot() bool {
 		u.OS.Platform == PlatformBot
 }
 
-// Parse accepts a raw user agent (string) and returns the UserAgent.
-func Parse(ua string) *UserAgent {
+// Parse accepts a raw user agent and returns the UserAgent. Passing true marks
+// frozen Apple OS versions, resolving full Safari versions where possible.
+func Parse(ua string, resolveFrozenOSVersion ...bool) *UserAgent {
 	dest := new(UserAgent)
 	parse(ua, nil, dest)
+	if firstFlag(resolveFrozenOSVersion) {
+		resolveFrozenOS(ua, dest)
+	}
 	return dest
 }
 
@@ -484,8 +488,11 @@ func ParseWithHints(ua string, hints *Hints) *UserAgent {
 // ParseUserAgent is the same as Parse, but populates the supplied UserAgent.
 // It is the caller's responsibility to call Reset() on the UserAgent before
 // passing it to this function.
-func ParseUserAgent(ua string, dest *UserAgent) {
+func ParseUserAgent(ua string, dest *UserAgent, resolveFrozenOSVersion ...bool) {
 	parse(ua, nil, dest)
+	if firstFlag(resolveFrozenOSVersion) {
+		resolveFrozenOS(ua, dest)
+	}
 }
 
 // ParseUserAgentWithHints is the same as ParseUserAgent, but accepts a Hints struct.

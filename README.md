@@ -51,6 +51,12 @@ myUA := "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) AppleWebKit/537.36 (KHT
 ua := uasurfer.Parse(myUA)
 ```
 
+Apple and Chromium freeze some OS-version tokens. `Parse(myUA)` returns the
+version exactly as reported. `Parse(myUA, true)` resolves a frozen iOS version
+from full Safari where possible, or sets `OS.Version.Extra` to
+`VersionFrozen`. Use `IsFrozenOSVersion`, `MinimumMacOSVersion`, or
+`ParseOSVersionDetails` when the reported value must remain unchanged.
+
 For a request loop, `ParseUserAgent(ua string, dest *UserAgent)` fills a
 `UserAgent` the caller owns; call `Reset()` before reusing one. `ParseWithHints`
 takes a `Hints` struct carrying what the agent cannot say for itself: the screen
@@ -107,9 +113,11 @@ Grouping worth knowing about:
 
 #### Browser Version
 
-Browser version is a `Version{Major, Minor, Patch}` of ints. For example Chrome
-45.0.23423 gives `{45, 0, 23423}`, so `ua.Browser.Version.Major > 23` is the
-usual test. Versions compare with `Less`: `if ver1.Less(ver2) {}`.
+Browser version is a `Version{Major, Minor, Patch, Extra}`. For example Chrome
+45.0.23423.85 gives `{45, 0, 23423, "85"}`, so
+`ua.Browser.Version.Major > 23` is the usual test. In-app browser versions are
+the app's version rather than the embedded Chrome or Safari version. Versions
+compare with `Less`: `if ver1.Less(ver2) {}`.
 
 An unknown version is `{0, 0, 0}`. Chromium browsers now report `0` for
 everything below the major version, whatever they are actually running.
@@ -124,7 +132,7 @@ Here are some examples across the platform, os.name, and os.version:
 * For Windows XP (Windows NT 5.1), "`PlatformWindows`" is the platform, "`OSWindows`" is the name, and `{5, 1, 0}` the version.
 * For OS X 10.5.1, "`PlatformMac`" is the platform, "`OSMacOSX`" the name, and `{10, 5, 1}` the version.
 * For Android 5.1, "`PlatformLinux`" is the platform, "`OSAndroid`" is the name, and `{5, 1, 0}` the version.
-* For iOS 5.1, "`PlatformiPhone`" or "`PlatformiPad`" is the platform, "`OSiOS`" is the name, and `{5, 1, 0}` the version.
+* For iOS 5.1, `PlatformiPhone` and `OSiOS` identify an iPhone; `PlatformiPad` and `OSiPadOS` identify an iPad.
 
 ###### Windows Version Guide
 
@@ -141,9 +149,9 @@ Windows 95, 98, and ME represent 0.01% of traffic worldwide and are not availabl
 #### DeviceType
 DeviceType is typically quite accurate, though determining between phones and tablets on Android is not always possible due to how some vendors design their UA strings. A mobile Android device without a tablet indicator defaults to being classified as a phone.
 
-`DeviceTV` covers the major TV brands and the streaming sticks and boxes from
-Apple, Google, Roku and Amazon, most of which also report an OS of their own:
-see [doc/tv.md](doc/tv.md).
+`DeviceTV` covers the major TV brands and most streaming boxes.
+`DeviceMediaHub` remains the fork-compatible classification for Chromecast,
+Roku, and Neo-X devices. See [doc/tv.md](doc/tv.md).
 
 ## Example Combinations of Attributes
 * Surface RT -> `OSWindows8`, `DeviceTablet`, OSVersion >= `6`

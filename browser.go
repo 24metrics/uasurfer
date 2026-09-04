@@ -25,6 +25,15 @@ func (u *UserAgent) parseBrowserName(ua string) bool {
 		return u.applyBotDefaults()
 	}
 
+	// Some apps send only their own identity, with no rendering-engine token.
+	// Browser-shaped agents are searched only in their identity tail below.
+	if !strings.Contains(ua, "applewebkit") && !strings.Contains(ua, "gecko") {
+		if name := appBrowser(ua); name != BrowserUnknown {
+			u.Browser.Name = name
+			return u.applyBotDefaults()
+		}
+	}
+
 	if strings.Contains(ua, "applewebkit") {
 		inApp := webkitApp(ua)
 		switch {
@@ -58,7 +67,7 @@ func (u *UserAgent) parseBrowserName(ua string) bool {
 		case strings.Contains(ua, "coc_coc_browser/"):
 			u.Browser.Name = BrowserCocCoc
 
-		case strings.Contains(ua, "yabrowser/"):
+		case strings.Contains(ua, "yabrowser/") || strings.Contains(ua, "yasearchbrowser/") || strings.Contains(ua, "yandexsearch/"):
 			u.Browser.Name = BrowserYandex
 
 		// Edge, Silk and other chrome-identifying browsers must evaluate before chrome, unless we want to add more overhead
@@ -145,13 +154,20 @@ notwebkit:
 // 2nd: look for browser-specific instructions (e.g. chrome/34)
 // 3rd: infer from OS (iOS only)
 func (u *UserAgent) parseBrowserVersion(ua string) {
+	// Modern Opera's own token wins over an embedded WebView's Version/4.0.
+	// Legacy Opera uses Version/ for its actual release and falls through.
+	if u.Browser.Name == BrowserOpera && u.Browser.Version.parseAfter(ua, "opr/", "opios/") {
+		return
+	}
+
 	switch u.Browser.Name {
 	// These state their own version, and the "version/" token in their agents
 	// belongs to something else: to the engine an app embeds, or to whatever an
 	// Android vendor decided to put there.
-	case BrowserChrome, BrowserFacebook, BrowserInstagram, BrowserWeChat, BrowserTikTok,
-		BrowserSnapchat, BrowserLine, BrowserVivaldi, BrowserWhale, BrowserMIUI,
-		BrowserHuawei, BrowserDuckDuckGo:
+	case BrowserChrome, BrowserIE, BrowserFirefox, BrowserUCBrowser, BrowserSamsung,
+		BrowserYandex, BrowserFacebook, BrowserInstagram, BrowserWeChat,
+		BrowserTikTok, BrowserSnapchat, BrowserLine, BrowserVivaldi, BrowserWhale,
+		BrowserMIUI, BrowserHuawei, BrowserDuckDuckGo:
 
 	default:
 		// if there is a 'version/#' attribute with numeric version, use it
@@ -167,7 +183,7 @@ func (u *UserAgent) parseBrowserVersion(ua string) {
 		// match both chrome and crios
 		_ = u.Browser.Version.parseAfter(ua, "chrome/", "crios/", "crmo/")
 	case BrowserYandex:
-		_ = u.Browser.Version.parseAfter(ua, "yabrowser/")
+		_ = u.Browser.Version.parseAfter(ua, "yabrowser/", "yasearchbrowser/", "yandexsearch/")
 	case BrowserQQ:
 		_ = u.Browser.Version.parseAfter(ua, "qq/", "qqbrowser/")
 	case BrowserIE:
@@ -208,21 +224,24 @@ func (u *UserAgent) parseBrowserVersion(ua string) {
 	case BrowserCocCoc:
 		_ = u.Browser.Version.parseAfter(ua, "coc_coc_browser/")
 
+	case BrowserSamsung:
+		_ = u.Browser.Version.parseAfter(ua, "samsungbrowser/")
+
 	// The in-app webviews. Facebook states the app version as FBAV and Instagram
 	// states it after its name with a space, both of which are the app's own
 	// numbering rather than a browser release.
 	case BrowserFacebook:
-		_ = u.Browser.Version.parseAfter(ua, "fbav/")
+		_ = appVersion(&u.Browser.Version, ua, "fbav/")
 	case BrowserInstagram:
-		_ = u.Browser.Version.parseAfter(ua, "instagram ")
+		_ = appVersion(&u.Browser.Version, ua, "instagram ")
 	case BrowserWeChat:
-		_ = u.Browser.Version.parseAfter(ua, "micromessenger/")
+		_ = appVersion(&u.Browser.Version, ua, "micromessenger/")
 	case BrowserTikTok:
-		_ = u.Browser.Version.parseAfter(ua, "musical_ly_", "trill_")
+		_ = appVersion(&u.Browser.Version, ua, "musical_ly_", "trill_")
 	case BrowserSnapchat:
-		_ = u.Browser.Version.parseAfter(ua, "snapchat/")
+		_ = appVersion(&u.Browser.Version, ua, "snapchat/")
 	case BrowserLine:
-		_ = u.Browser.Version.parseAfter(ua, "line/")
+		_ = appVersion(&u.Browser.Version, ua, "line/")
 
 	case BrowserVivaldi:
 		_ = u.Browser.Version.parseAfter(ua, "vivaldi/")
@@ -233,7 +252,7 @@ func (u *UserAgent) parseBrowserVersion(ua string) {
 	case BrowserHuawei:
 		_ = u.Browser.Version.parseAfter(ua, "huaweibrowser/")
 	case BrowserDuckDuckGo:
-		_ = u.Browser.Version.parseAfter(ua, "duckduckgo/")
+		_ = appVersion(&u.Browser.Version, ua, "duckduckgo/", "ddg/")
 	case BrowserNintendo:
 		_ = u.Browser.Version.parseAfter(ua, "nintendobrowser/")
 	}

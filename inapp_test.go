@@ -57,6 +57,8 @@ func TestInAppBrowsers(t *testing.T) {
 			"(KHTML, like Gecko) Version/13.1.1 Mobile/15E148 DuckDuckGo/7 Safari/605.1.15", BrowserDuckDuckGo},
 		{"Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 " +
 			"Chrome/87.0.4280.141 Mobile DuckDuckGo/5 Safari/537.36", BrowserDuckDuckGo},
+		{"Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) " +
+			"Chrome/124.0.0.0 Mobile Safari/537.36 DDG/5", BrowserDuckDuckGo},
 
 		// Chromium under another brand
 		{"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) " +
@@ -94,5 +96,11 @@ func TestAppBrowserAnchoring(t *testing.T) {
 		if got := appBrowser(ua); got != BrowserUnknown {
 			t.Errorf("appBrowser = %v, want BrowserUnknown: %.90s", got, ua)
 		}
+	}
+
+	ua := "Mozilla/5.0 (Instagram Device; Windows NT 10.0) AppleWebKit/537.36 " +
+		"(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+	if got := Parse(ua).Browser.Name; got != BrowserChrome {
+		t.Errorf("browser = %v, want BrowserChrome for platform marker", got)
 	}
 }

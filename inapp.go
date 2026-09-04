@@ -29,6 +29,7 @@ var appMarkers = []struct {
 	{"miuibrowser", BrowserMIUI},
 	{"huaweibrowser", BrowserHuawei},
 	{"duckduckgo", BrowserDuckDuckGo},
+	{"ddg/", BrowserDuckDuckGo},
 }
 
 // appBuckets indexes appMarkers by first byte, and appFirstBytes is the set of
@@ -78,6 +79,55 @@ func isAppEdge(c byte) bool {
 	return isSpace(c)
 }
 
+// appVersion parses only the numeric dotted version attached to an app marker,
+// excluding metadata that follows it in the same user-agent field.
+func appVersion(v *Version, ua string, markers ...string) bool {
+	tail := appIdentityTail(ua)
+	for _, marker := range markers {
+		index := anchoredAppMarker(tail, marker)
+		if index == -1 {
+			continue
+		}
+
+		version := tail[index+len(marker):]
+		end := 0
+		for end < len(version) && (isDigit(version[end]) || version[end] == '.') {
+			end++
+		}
+		version = strings.TrimRight(version[:end], ".")
+		if parts := strings.Split(version, "."); len(parts) > 3 {
+			v.Extra = strings.Join(parts[3:], ".")
+		}
+		return v.parse(version)
+	}
+	return false
+}
+
+func appIdentityTail(ua string) string {
+	if _, tail, ok := strings.Cut(ua, "chrome/"); ok {
+		return tail
+	}
+	if tail := webkitAppTail(ua); tail != "" {
+		return tail
+	}
+	return ua
+}
+
+func anchoredAppMarker(s, marker string) int {
+	for offset := 0; offset < len(s); {
+		index := strings.Index(s[offset:], marker)
+		if index == -1 {
+			return -1
+		}
+		index += offset
+		if index == 0 || isAppEdge(s[index-1]) {
+			return index
+		}
+		offset = index + 1
+	}
+	return -1
+}
+
 // webkitApp returns the app rendering the page on an Apple engine, for the
 // agents that carry no Chrome token for chromiumBrowser to work from.
 //
@@ -89,11 +139,17 @@ func isAppEdge(c byte) bool {
 // that build their agent by appending their name to Safari's, as Line does,
 // state it too.
 func webkitApp(ua string) BrowserName {
-	_, tail, ok := strings.Cut(ua, "mobile/")
-	if !ok {
-		return BrowserUnknown
+	return appBrowser(webkitAppTail(ua))
+}
+
+func webkitAppTail(ua string) string {
+	if _, tail, ok := strings.Cut(ua, "mobile/"); ok {
+		return tail
 	}
-	return appBrowser(tail)
+	if _, tail, ok := strings.Cut(ua, "like gecko)"); ok {
+		return tail
+	}
+	return ""
 }
 
 // chromiumBrowser returns the browser behind a Chromium agent: Chrome unless

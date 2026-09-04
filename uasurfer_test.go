@@ -157,11 +157,11 @@ var testUAVars = []struct {
 
 	{"Mozilla/5.0 (iPhone; CPU iPhone OS 12_3_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.0 EdgiOS/44.3.5 Mobile/15E148 Safari/605.1.15",
 		UserAgent{
-			Browser{BrowserIE, Version{12, 0, 0, ""}}, OS{PlatformiPhone, OSiOS, Version{12, 3, 1, ""}}, DevicePhone}},
+			Browser{BrowserIE, Version{44, 3, 5, ""}}, OS{PlatformiPhone, OSiOS, Version{12, 3, 1, ""}}, DevicePhone}},
 
 	{"Mozilla/5.0 (iPad; CPU OS 12_3_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.0 EdgiOS/44.3.2 Mobile/15E148 Safari/605.1.15",
 		UserAgent{
-			Browser{BrowserIE, Version{12, 0, 0, ""}}, OS{PlatformiPad, OSiPadOS, Version{12, 3, 1, ""}}, DeviceTablet}},
+			Browser{BrowserIE, Version{44, 3, 2, ""}}, OS{PlatformiPad, OSiPadOS, Version{12, 3, 1, ""}}, DeviceTablet}},
 
 	{"Mozilla/5.0 (Linux; Android 9; motorola one) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.90 Mobile Safari/537.36 EdgA/42.0.2.3728",
 		UserAgent{
@@ -368,7 +368,7 @@ var testUAVars = []struct {
 
 	{"mozilla/5.0 (smart-tv; linux; tizen 2.3) applewebkit/538.1 (khtml, like gecko) samsungbrowser/1.0 tv safari/538.1", // Samsung SmartTV
 		UserAgent{
-			Browser{BrowserSamsung, Version{0, 0, 0, ""}}, OS{PlatformLinux, OSTizen, Version{2, 3, 0, ""}}, DeviceTV}},
+			Browser{BrowserSamsung, Version{1, 0, 0, ""}}, OS{PlatformLinux, OSTizen, Version{2, 3, 0, ""}}, DeviceTV}},
 
 	{"mozilla/5.0 (linux; u) applewebkit/537.36 (khtml, like gecko) version/4.0 mobile safari/537.36 smarttv/6.0 (netcast)",
 		UserAgent{
@@ -581,7 +581,7 @@ var testUAVars = []struct {
 			Browser{BrowserAndroid, Version{2, 1, 0, ""}}, OS{PlatformLinux, OSAndroid, Version{10, 0, 0, ""}}, DeviceTV}},
 	{"Instagram 5.0.2 Android (15/4.0.3; 240dpi; 540x960; HTC/vodafone_de; HTC Sensation Z710e; pyramid; pyramid; de_DE)",
 		UserAgent{
-			Browser{BrowserUnknown, Version{0, 0, 0, ""}}, OS{PlatformLinux, OSAndroid, Version{0, 0, 0, ""}}, DevicePhone}},
+			Browser{BrowserInstagram, Version{5, 0, 2, ""}}, OS{PlatformLinux, OSAndroid, Version{0, 0, 0, ""}}, DevicePhone}},
 	{"VitaMahjong/460 CFNetwork/3860.600.12 Darwin/25.5.0",
 		UserAgent{
 			Browser{BrowserUnknown, Version{0, 0, 0, ""}}, OS{PlatformiPhone, OSiOS, Version{26, 5, 0, ""}}, DevicePhone}},
@@ -1329,7 +1329,7 @@ func TestAgentSurfer(t *testing.T) {
 	for _, determined := range testUAVars {
 		t.Run("", func(t *testing.T) {
 			testFuncs := []func(string) *UserAgent{
-				Parse,
+				func(ua string) *UserAgent { return Parse(ua) },
 				func(ua string) *UserAgent {
 					u := new(UserAgent)
 					ParseUserAgent(ua, u)
