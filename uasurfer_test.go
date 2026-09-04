@@ -357,7 +357,7 @@ var testUAVars = []struct {
 		"Mozilla/5.0 (iPhone; CPU iPhone OS 12_3_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.0 EdgiOS/44.3.5 Mobile/15E148 Safari/605.1.15",
 		UserAgent{
 			Browser{
-				BrowserIE, Version{12, 0, 0, ""},
+				BrowserIE, Version{44, 3, 5, ""},
 			},
 			OS{
 				PlatformiPhone, OSiOS, Version{12, 3, 1, ""},
@@ -369,7 +369,7 @@ var testUAVars = []struct {
 		"Mozilla/5.0 (iPad; CPU OS 12_3_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.0 EdgiOS/44.3.2 Mobile/15E148 Safari/605.1.15",
 		UserAgent{
 			Browser{
-				BrowserIE, Version{12, 0, 0, ""},
+				BrowserIE, Version{44, 3, 2, ""},
 			},
 			OS{
 				PlatformiPad, OSiOS, Version{12, 3, 1, ""},
@@ -727,7 +727,7 @@ var testUAVars = []struct {
 		"Mozilla/5.0 (Linux; Android 4.4.4; SD4930UR Build/KTU84P) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/34.0.0.0 Mobile Safari/537.36 [FB_IAB/FB4A;FBAV/35.0.0.48.273;]",
 		UserAgent{
 			Browser{
-				BrowserChrome, Version{34, 0, 0, "0"},
+				BrowserFacebook, Version{35, 0, 0, "48.273"},
 			},
 			OS{
 				PlatformLinux, OSKindle, Version{4, 4, 4, ""},
@@ -922,7 +922,7 @@ var testUAVars = []struct {
 		"mozilla/5.0 (smart-tv; linux; tizen 2.3) applewebkit/538.1 (khtml, like gecko) samsungbrowser/1.0 tv safari/538.1", // Samsung SmartTV
 		UserAgent{
 			Browser{
-				BrowserSamsung, Version{0, 0, 0, ""},
+				BrowserSamsung, Version{1, 0, 0, ""},
 			},
 			OS{
 				PlatformLinux, OSLinux, Version{0, 0, 0, ""},
@@ -942,12 +942,12 @@ var testUAVars = []struct {
 			DeviceTV,
 		},
 	},
-	// Google search app (GSA) for iOS -- it's Safari in disguise as of v6
+	// Google Search app: without Version/ it is not a full Safari signature.
 	{
 		"Mozilla/5.0 (iPad; CPU OS 8_3 like Mac OS X) AppleWebKit/600.1.4 (KHTML, like Gecko) GSA/6.0.51363 Mobile/12F69 Safari/600.1.4",
 		UserAgent{
 			Browser{
-				BrowserSafari, Version{8, 3, 0, ""},
+				BrowserUnknown, Version{},
 			},
 			OS{
 				PlatformiPad, OSiOS, Version{8, 3, 0, ""},
@@ -1932,7 +1932,7 @@ var testUAVars = []struct {
 		"Mozilla/5.0 (iPhone; CPU iPhone OS 10_2_1 like Mac OS X) AppleWebKit/602.4.6 (KHTML, like Gecko) Mobile/14D27 [FBAN/FBIOS;FBAV/86.0.0.48.52;FBBV/53842252;FBDV/iPhone9,1;FBMD/iPhone;FBSN/iOS;FBSV/10.2.1;FBSS/2;FBCR/Verizon;FBID/phone;FBLC/en_US;FBOP/5;FBRV/0]",
 		UserAgent{
 			Browser{
-				BrowserSafari, Version{10, 2, 1, ""},
+				BrowserFacebook, Version{86, 0, 0, "48.52"},
 			},
 			OS{
 				PlatformiPhone, OSiOS, Version{10, 2, 1, ""},
@@ -2959,7 +2959,7 @@ func TestAgentSurfer(t *testing.T) {
 	for _, determined := range testUAVars {
 		t.Run("", func(t *testing.T) {
 			testFuncs := []func(string) *UserAgent{
-				Parse,
+				func(ua string) *UserAgent { return Parse(ua) },
 				func(ua string) *UserAgent {
 					u := new(UserAgent)
 					ParseUserAgent(ua, u)
@@ -3027,7 +3027,7 @@ func BenchmarkEvalSystem(b *testing.B) {
 	v := UserAgent{}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		v.evalOS(testUAVars[i%num].UA)
+		v.evalOS(testUAVars[i%num].UA, false)
 	}
 }
 

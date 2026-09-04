@@ -59,3 +59,10 @@ Thumbs.db
 # Others #
 ######################
 .idea/
+
+# Reference corpora downloaded by cmd/uacompare. Not committed: the Matomo
+# fixtures carry the LGPL, and fetching them locally to measure against is use
+# rather than redistribution.
+######################
+testdata/matomo/
+testdata/uap-core/
