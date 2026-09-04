@@ -70,6 +70,13 @@ const (
 	BrowserYandexBot
 	BrowserCocCocBot
 	BrowserYahooBot // Bot list ends here
+	BrowserFacebook
+	BrowserInstagram
+	BrowserWeChat
+	BrowserTikTok
+	BrowserSnapchat
+	BrowserLine
+	BrowserDuckDuckGo
 )
 
 // StringTrimPrefix is like String() but trims the "Browser" prefix
@@ -142,6 +149,29 @@ type Version struct {
 	Extra string
 }
 
+// VersionFrozen is the marker Parse(ua, true) assigns to OS.Version.Extra when
+// it keeps an OS version that the browser reports as a constant for every
+// release. The numbers are the ones stated in the user agent, so they remain
+// usable, while the marker says they cannot be read as the version of the system
+// in front of the user.
+//
+// Browser.Version.Extra retains its existing meaning: components beyond the
+// patch level. IsFrozen should therefore be used on an OS version produced by
+// Parse(ua, true), not as a general classifier for arbitrary Version values.
+// A macOS floor is not encoded in Extra; MinimumMacOSVersion returns it as a
+// separate Version without changing the parsed UserAgent.
+const VersionFrozen = "frozen"
+
+// IsFrozen reports whether this version is a constant the browser reports for
+// every release rather than the version of the system, which is the case for the
+// iOS-family and desktop platform tokens that Apple, Google and Mozilla cap.
+//
+// Only Parse(ua, true) sets the marker. Without the flag Parse states what the
+// user agent says, so use IsFrozenOSVersion there.
+func (v Version) IsFrozen() bool {
+	return v.Extra == VersionFrozen
+}
+
 func (v Version) Less(c Version) bool {
 	if v.Major < c.Major {
 		return true
@@ -179,6 +209,22 @@ type OS struct {
 	Version  Version
 }
 
+// OSVersionDetails describes the OS-version information that can be derived
+// from a user agent without replacing the value it actually reports.
+type OSVersionDetails struct {
+	// Reported is the OS version stated in the user agent, identical to
+	// Parse(rawUA).OS.Version. It never carries VersionFrozen.
+	Reported Version
+
+	// Minimum is a conservative macOS floor derived from Safari's version, or
+	// the zero Version when no floor can be established.
+	Minimum Version
+
+	// Frozen reports whether Reported is a known constant rather than a
+	// reliable measurement of the current OS version.
+	Frozen bool
+}
+
 // Reset resets the UserAgent to it's zero value
 func (ua *UserAgent) Reset() {
 	ua.Browser = Browser{}
@@ -201,20 +247,43 @@ func (ua *UserAgent) IsBot() bool {
 }
 
 // Parse accepts a raw user agent (string) and returns the UserAgent.
-func Parse(ua string) *UserAgent {
+//
+// Called with one argument it reports what the user agent states and applies no
+// heuristics, so an OS version that the browser reports as a frozen constant is
+// passed through unchanged. Use IsFrozenOSVersion to recognise such a value.
+//
+// The optional resolveFrozenOSVersion asks for that constant to be dealt with
+// instead of passed through. An iOS user agent whose platform token is frozen then
+// takes its OS version from full Safari's own version, which tracks the iOS
+// release, and keeps the stated numbers with the VersionFrozen marker where no such
+// hint exists, as in a WKWebView, an in-app browser or a third-party browser. On
+// macOS nothing can be recovered, so the value is only marked. The result is then
+// no longer a plain reading of the user agent, which is why this has to be asked
+// for.
+//
+//	Parse(ua)        // as stated
+//	Parse(ua, false) // identical
+//	Parse(ua, true)  // resolved where possible, marked otherwise
+//
+// Only the first value is read; any further ones are ignored.
+func Parse(ua string, resolveFrozenOSVersion ...bool) *UserAgent {
 	dest := new(UserAgent)
-	parse(ua, dest)
+	parse(ua, dest, firstFlag(resolveFrozenOSVersion))
 	return dest
 }
 
 // ParseUserAgent is the same as Parse, but populates the supplied UserAgent.
 // It is the caller's responsibility to call Reset() on the UserAgent before
 // passing it to this function.
-func ParseUserAgent(ua string, dest *UserAgent) {
-	parse(ua, dest)
+func ParseUserAgent(ua string, dest *UserAgent, resolveFrozenOSVersion ...bool) {
+	parse(ua, dest, firstFlag(resolveFrozenOSVersion))
 }
 
-func parse(ua string, dest *UserAgent) {
+func firstFlag(flags []bool) bool {
+	return len(flags) > 0 && flags[0]
+}
+
+func parse(ua string, dest *UserAgent, resolveFrozenOSVersion bool) {
 	ua = normalise(ua)
 	switch {
 	case len(ua) == 0:
@@ -224,7 +293,7 @@ func parse(ua string, dest *UserAgent) {
 		dest.DeviceType = DeviceUnknown
 
 	// stop on on first case returning true
-	case dest.evalOS(ua):
+	case dest.evalOS(ua, resolveFrozenOSVersion):
 	case dest.evalBrowserName(ua):
 	default:
 		dest.evalBrowserVersion(ua)

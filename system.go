@@ -10,7 +10,7 @@ var (
 	amazonFireFingerprint = regexp.MustCompile(`\s(k[a-z]{3,5}|sd\d{4}ur)\s`) //tablet or phone
 )
 
-func (u *UserAgent) evalOS(ua string) bool {
+func (u *UserAgent) evalOS(ua string, resolveFrozenOSVersion bool) bool {
 	// This is a subjective parsing for cfnetwork user agents.
 	// For us, we consider this as iOS from in-app browsers.
 	if strings.Contains(ua, "cfnetwork/") {
@@ -52,9 +52,15 @@ func (u *UserAgent) evalOS(ua string) bool {
 
 	case strings.HasPrefix(specs, "ipad") || strings.HasPrefix(specs, "iphone") || strings.HasPrefix(specs, "ipod touch") || strings.HasPrefix(specs, "ipod"):
 		u.evaliOS(specs, agentPlatform)
+		if resolveFrozenOSVersion {
+			resolveFrozenIOSVersion(ua, agentPlatform, &u.OS.Version)
+		}
 
 	case specs == "macintosh":
 		u.evalMacintosh(ua)
+		if resolveFrozenOSVersion {
+			markFrozenMacOSVersion(ua, &u.OS.Version)
+		}
 
 	default:
 		switch {
@@ -298,6 +304,233 @@ func (o *OS) getiOSVersion(uaPlatformGroup string) {
 	}
 
 	o.Version.parse(uaPlatformGroup)
+}
+
+// resolveFrozenIOSVersion replaces a frozen iOS-family version with the release
+// it can be recovered from, and marks it when it cannot. The numbers stated in the
+// user agent are kept either way, so a caller never loses the value; the marker
+// says it is a constant rather than a measurement.
+func resolveFrozenIOSVersion(ua, agentPlatform string, version *Version) {
+	if !hasAnyFrozenIOSVersionToken(agentPlatform) {
+		return
+	}
+
+	// Safari is tied to iOS releases, so its Version/ token is the best
+	// available iOS version once the platform token is frozen. Reuse the normal
+	// browser classifier so WKWebViews, in-app browsers and named third-party
+	// browsers cannot be mistaken for full Safari.
+	candidate := UserAgent{}
+	candidate.evalBrowserName(ua)
+	if candidate.Browser.Name == BrowserSafari {
+		var safariVersion Version
+		if safariVersion.findVersionNumber(ua, "version/") && safariVersion.Major >= 26 {
+			// Extra belongs to Safari's version token. The OS version has only
+			// three numeric components; VersionFrozen is its sole Extra value.
+			safariVersion.Extra = ""
+			*version = safariVersion
+			return
+		}
+	}
+
+	version.Extra = VersionFrozen
+}
+
+// markFrozenMacOSVersion flags a capped desktop version. Nothing can be recovered
+// here, because one Safari release serves several macOS versions and the other
+// browsers cap the token without offering a usable version of their own, so the
+// value is only marked. See MinimumMacOSVersion for the lower bound that can still
+// be derived.
+func markFrozenMacOSVersion(ua string, version *Version) {
+	candidate := UserAgent{}
+	candidate.evalBrowserName(ua)
+	candidate.evalBrowserVersion(ua)
+
+	if hasFrozenMacOSVersion(ua, candidate.Browser) {
+		version.Extra = VersionFrozen
+	}
+}
+
+// IsFrozenOSVersion reports whether the OS version Parse returns for this user
+// agent is a constant the browser sends for every release, rather than the
+// system in front of the user. When it is true, treat OS.Version as unknown.
+//
+// Apple and Google cap the platform token they report. A Mac running macOS 26
+// and one running macOS 11 therefore send the same value. The browser version
+// proves the value cannot be genuine only after that browser drops Catalina:
+//
+//	Safari  16 and later, since Catalina supports no Safari beyond 15.6
+//	Chrome  129 and later, since Catalina supports no Chrome beyond 128
+//
+// Firefox has capped its token at 10.15 since version 87, but still supports
+// Catalina. Its token may therefore be genuine and is deliberately not marked.
+//
+// On the iOS family WebKit hardcodes the token for every client, so any of the
+// frozen values counts, whatever browser sent it. Note that those values are also
+// real iOS releases: a device genuinely running 18.7 is reported as frozen too,
+// because the two cannot be told apart.
+//
+// The value is about the user agent, not about a particular call: for an iOS user
+// agent that states full Safari 26 or later, Parse(ua, true) can replace the frozen
+// token with the release recovered from the Safari version, and this function
+// still reports the token itself as frozen.
+//
+// A false result means the version is either genuine or not provably frozen, not
+// that it is guaranteed to be accurate.
+func IsFrozenOSVersion(rawUserAgent string) bool {
+	ua, parsed := parseOSVersionInput(rawUserAgent)
+	return isFrozenOSVersion(ua, parsed)
+}
+
+func isFrozenOSVersion(ua string, parsed *UserAgent) bool {
+	switch parsed.OS.Name {
+	case OSiOS:
+		return hasAnyFrozenIOSVersionToken(ua)
+
+	case OSMacOSX:
+		return hasFrozenMacOSVersion(ua, parsed.Browser)
+
+	default:
+		return false
+	}
+}
+
+// safariMacOSFloors maps a Safari major release to the oldest macOS version it
+// was offered for. Safari on the Mac ships for the current system and the two
+// before it, so its version does not identify a single release, but it does rule
+// out everything older than the entry here.
+//
+// The values come from the overview of Apple's Safari release notes, for example
+// Safari 26 being available for macOS 26, macOS Sequoia and macOS Sonoma.
+//
+// Releases before 16 are absent on purpose: their floor is at or below the
+// capped token itself, so it would add nothing. There is no formula behind these
+// numbers, and the jump from macOS 15 to macOS 26 shows why, so a new Safari
+// generation needs a new entry here.
+var safariMacOSFloors = []struct {
+	safariMajor int
+	macOS       Version
+}{
+	{16, Version{Major: 11}}, // Big Sur, Monterey, Ventura
+	{17, Version{Major: 12}}, // Monterey, Ventura, Sonoma
+	{18, Version{Major: 13}}, // Ventura, Sonoma, macOS 15
+	{26, Version{Major: 14}}, // Sonoma, Sequoia, macOS 26
+}
+
+// MinimumMacOSVersion returns the oldest macOS release that could be behind this
+// user agent, or the zero Version when no bound can be derived. The result is
+// separate metadata: it is not stored in OS.Version.Extra and this function does
+// not modify a UserAgent returned by Parse.
+//
+// It exists because the macOS version in a user agent is capped and therefore
+// useless on its own, while Safari's own version still carries information: a
+// given Safari release runs on at most three macOS versions, so the oldest of
+// them is a floor that cannot be wrong. Safari 26.5 means macOS 14 or newer.
+//
+// The result is deliberately a floor, not a guess. Deriving an exact version by
+// subtracting a constant from the Safari version is wrong twice over: it ignores
+// that Safari ships for two older systems, and the year-based renumbering in 2025
+// broke any fixed offset.
+//
+// The zero Version is returned for anything that carries no such hint: other
+// browsers, which cap the token without a usable version of their own, and Safari
+// before 16, whose floor would be older than the capped token anyway. A Safari
+// generation newer than the newest known entry falls back to that entry, which
+// stays a valid floor.
+//
+// An iPad requesting a desktop site can send a UA indistinguishable from a
+// Mac. The result is therefore a macOS floor only if the request actually came
+// from a Mac. If a Mobile/ token makes the iPad origin visible, zero is returned.
+func MinimumMacOSVersion(rawUserAgent string) Version {
+	ua, parsed := parseOSVersionInput(rawUserAgent)
+	return minimumMacOSVersion(ua, parsed)
+}
+
+func minimumMacOSVersion(ua string, parsed *UserAgent) Version {
+	if parsed.OS.Name != OSMacOSX || parsed.Browser.Name != BrowserSafari || strings.Contains(ua, "mobile/") {
+		return Version{}
+	}
+
+	floor := Version{}
+	for _, entry := range safariMacOSFloors {
+		if parsed.Browser.Version.Major >= entry.safariMajor {
+			floor = entry.macOS
+		}
+	}
+	return floor
+}
+
+// ParseOSVersionDetails returns the OS version stated in rawUserAgent together
+// with any independently derivable macOS floor and its frozen-token status.
+//
+// Reported is identical to Parse(rawUserAgent).OS.Version: it is never resolved
+// from Safari's version and never receives VersionFrozen in Extra. Use
+// Parse(rawUserAgent, true) when the opt-in resolved-or-marked representation is
+// wanted instead. Minimum and Frozen have the same semantics as
+// MinimumMacOSVersion and IsFrozenOSVersion.
+func ParseOSVersionDetails(rawUserAgent string) OSVersionDetails {
+	ua, parsed := parseOSVersionInput(rawUserAgent)
+	return OSVersionDetails{
+		Reported: parsed.OS.Version,
+		Minimum:  minimumMacOSVersion(ua, parsed),
+		Frozen:   isFrozenOSVersion(ua, parsed),
+	}
+}
+
+func parseOSVersionInput(rawUserAgent string) (string, *UserAgent) {
+	ua := normalise(rawUserAgent)
+	parsed := new(UserAgent)
+	parse(ua, parsed, false)
+	return ua, parsed
+}
+
+func hasAnyFrozenIOSVersionToken(ua string) bool {
+	return hasFrozenIOSVersionToken(ua, "18_6") ||
+		hasFrozenIOSVersionToken(ua, "18_6_2") ||
+		hasFrozenIOSVersionToken(ua, "18_7")
+}
+
+func hasFrozenMacOSVersion(ua string, browser Browser) bool {
+	// WebKit and Chromium use exactly this underscore-separated cap. Read it
+	// from the platform group rather than matching arbitrary text elsewhere.
+	if macOSVersionToken(ua) != "10_15_7" {
+		return false
+	}
+
+	switch browser.Name {
+	case BrowserSafari:
+		return browser.Version.Major >= 16
+	case BrowserChrome:
+		return browser.Version.Major >= 129
+	default:
+		return false
+	}
+}
+
+func macOSVersionToken(ua string) string {
+	start := strings.IndexByte(ua, '(')
+	if start == -1 {
+		return ""
+	}
+	end := strings.IndexByte(ua[start+1:], ')')
+	if end == -1 {
+		return ""
+	}
+	platform := ua[start+1 : start+1+end]
+	const prefix = "mac os x "
+	index := strings.Index(platform, prefix)
+	if index == -1 {
+		return ""
+	}
+	fields := strings.Fields(platform[index+len(prefix):])
+	if len(fields) == 0 {
+		return ""
+	}
+	return strings.TrimRight(fields[0], ";")
+}
+
+func hasFrozenIOSVersionToken(agentPlatform, version string) bool {
+	return strings.Contains(agentPlatform, "cpu iphone os "+version+" like mac os x") ||
+		strings.Contains(agentPlatform, "cpu os "+version+" like mac os x")
 }
 
 // strToInt simply accepts a string and returns a `int`,

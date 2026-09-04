@@ -1,0 +1,53 @@
+# Intentional differences from the external reference corpora, used by
+# cmd/uacompare.
+#
+# Format: scope <TAB> dimension <TAB> key <TAB> reason
+#   scope     "label" for a whole reference label, "ua" for one user agent
+#   dimension browser, browser_version, os, os_version or device
+#   key       the reference label, or the exact user agent string
+#
+# Anything listed here counts as declared rather than as a mismatch, so the
+# mismatches left in a run are the ones that still need a decision.
+
+label	browser	Mobile Safari UI/WKWebView	A bare WKWebView carries no browser identity, so this package reports BrowserUnknown rather than Safari.
+label	browser_version	Mobile Safari UI/WKWebView	Follows from the browser decision above.
+contains	browser	cfnetwork/	A CFNetwork user agent names the app that made the request, not a browser; this package treats it as an unidentified iOS client.
+contains	browser_version	cfnetwork/	Follows from the browser decision above.
+
+# Windows releases before XP are an explicit non-goal, see the README.
+contains	os	windows 95	Not supported: pre-XP Windows.
+contains	os	windows 98	Not supported: pre-XP Windows.
+contains	os	win 9x	Not supported: pre-XP Windows.
+contains	os	windows me	Not supported: pre-XP Windows.
+contains	os	windows ce	Not supported: Windows CE.
+contains	os	win16	Not supported: 16-bit Windows.
+contains	os_version	windows 95	Follows from the OS decision above.
+contains	os_version	windows 98	Follows from the OS decision above.
+contains	os_version	win 9x	Follows from the OS decision above.
+contains	os_version	windows me	Follows from the OS decision above.
+contains	os_version	windows ce	Follows from the OS decision above.
+contains	os_version	win16	Follows from the OS decision above.
+
+# This package reports the Windows NT version, the references report the
+# marketing name, so Windows 7 reads as 6.1 here and as 7 there. The two
+# numbering schemes are not comparable; see the OS Version section of the README.
+label	os_version	Windows	NT numbering versus marketing name.
+
+# Linux distributions are reported without a version here, as the README states.
+label	os_version	Linux	Linux is reported without a distribution version.
+label	os_version	GNU/Linux	Linux is reported without a distribution version.
+label	os_version	Ubuntu	Linux is reported without a distribution version.
+label	os_version	Debian	Linux is reported without a distribution version.
+label	os_version	Fedora	Linux is reported without a distribution version.
+label	os_version	Gentoo	Linux is reported without a distribution version.
+label	os_version	Red Hat	Linux is reported without a distribution version.
+label	os_version	SUSE	Linux is reported without a distribution version.
+label	os_version	Arch Linux	Linux is reported without a distribution version.
+label	os_version	Linux Mint	Linux is reported without a distribution version.
+label	os_version	Mandriva	Linux is reported without a distribution version.
+label	os_version	Slackware	Linux is reported without a distribution version.
+label	os_version	openSUSE	Linux is reported without a distribution version.
+label	os_version	CentOS	Linux is reported without a distribution version.
+label	os_version	Knoppix	Linux is reported without a distribution version.
+label	os_version	Kubuntu	Linux is reported without a distribution version.
+label	os_version	Raspbian	Linux is reported without a distribution version.
