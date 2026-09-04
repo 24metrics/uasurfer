@@ -80,8 +80,8 @@ func TestDeviceFixturesAreNotBots(t *testing.T) {
 			if got == want[1:] {
 				t.Logf("now correct, drop the %q marker from this row: %s", "!", agent)
 			}
-		case got != want && !(want == "TV" && got == "MediaHub") &&
-			!(want == "Phone" && got == "Console" && strings.Contains(strings.ToLower(agent), "xbox")):
+		case got != want && (want != "TV" || got != "MediaHub") &&
+			(want != "Phone" || got != "Console" || !strings.Contains(strings.ToLower(agent), "xbox")):
 			t.Errorf("device = %s, want %s: %s", got, want, agent)
 		}
 	}

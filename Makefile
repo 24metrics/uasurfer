@@ -61,7 +61,7 @@ benchguard: $(GOBIN)/benchstat
 		| awk -v thresh=$(THRESH) -v minns=$(MINNS) -f $(CURDIR)/scripts/benchguard.awk
 
 $(GOBIN)/benchstat:
-	go install golang.org/x/perf/cmd/benchstat@latest
+	go install golang.org/x/perf/cmd/benchstat@v0.0.0-20260709024250-82a0b07e230d
 
 $(GOBIN)/goimports:
 	go install golang.org/x/tools/cmd/goimports@latest

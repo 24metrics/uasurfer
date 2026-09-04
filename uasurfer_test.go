@@ -1365,7 +1365,7 @@ func TestAgentSurfer(t *testing.T) {
 					t.Logf("agent: %s", determined.UA)
 				}
 
-				if ua.DeviceType != determined.DeviceType && !(determined.DeviceType == DeviceTV && ua.DeviceType == DeviceMediaHub) {
+				if ua.DeviceType != determined.DeviceType && (determined.DeviceType != DeviceTV || ua.DeviceType != DeviceMediaHub) {
 					t.Errorf("device type: got %v, wanted %v", ua.DeviceType, determined.DeviceType)
 					t.Logf("agent: %s", determined.UA)
 				}
@@ -1411,7 +1411,7 @@ func TestAgentSurfer(t *testing.T) {
 					t.Logf("agent: %s", determined.UA)
 				}
 
-				if ua.DeviceType != determined.DeviceType && !(determined.DeviceType == DeviceTV && ua.DeviceType == DeviceMediaHub) {
+				if ua.DeviceType != determined.DeviceType && (determined.DeviceType != DeviceTV || ua.DeviceType != DeviceMediaHub) {
 					t.Errorf("device type: got %v, wanted %v", ua.DeviceType, determined.DeviceType)
 					t.Logf("agent: %s", determined.UA)
 				}
