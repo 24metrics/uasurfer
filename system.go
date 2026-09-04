@@ -95,8 +95,8 @@ func (u *UserAgent) parseOS(ua string, hints *Hints) bool {
 		u.OS.Platform = PlatformBlackberry
 		u.OS.Name = OSBlackberry
 
-	// Windows Phone
-	case strings.Contains(agentPlatform, "windows phone "):
+	// Windows Phone. Xbox agents can contain this token too.
+	case strings.Contains(agentPlatform, "windows phone ") && !strings.Contains(ua, "xbox"):
 		u.parseWindowsPhone(agentPlatform)
 
 	// Windows, Xbox
@@ -298,7 +298,7 @@ func (u *UserAgent) parseWindows(ua string) {
 	if strings.Contains(ua, "xbox") {
 		u.OS.Platform = PlatformXbox
 		u.OS.Name = OSXbox
-		if !u.OS.Version.parseAfter(ua, "windows nt ") {
+		if !u.OS.Version.parseAfter(ua, "windows phone ", "windows nt ") {
 			u.OS.Version = Version{Major: 6}
 		}
 		return
@@ -355,6 +355,12 @@ func cutAfter(s string, markers ...string) (string, bool) {
 func (v *Version) parseAfter(s string, markers ...string) bool {
 	for _, m := range markers {
 		if _, after, ok := strings.Cut(s, m); ok && v.parse(after) {
+			version := strings.TrimRight(strings.Fields(after)[0], ":;.,/\\")
+			if parts := strings.Split(version, "."); len(parts) > 3 {
+				v.Extra = strings.Join(parts[3:], ".")
+			} else {
+				v.Extra = ""
+			}
 			return true
 		}
 	}

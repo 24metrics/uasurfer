@@ -16,7 +16,7 @@ var tvMarkers = []string{
 	// reference parser reads them as a desktop or a phone.
 	"freebox", "sfrwpebrowser", "mfi_airplay",
 	"tpm191e", "tpm171e", "nokia streaming box", "stableavb_telly", "lxbox51",
-	" x96", "canal plus box", "vectra 4k box",
+	"x88", " x96", "canal plus box", "vectra 4k box",
 	"diw377", "diw380", "dv8555", "dctiw362", "gd1 4k", "ai pont", "b-stream",
 }
 
@@ -150,6 +150,14 @@ func isAndroidWearable(ua string) bool {
 
 func (u *UserAgent) parseDevice(ua string) {
 	switch {
+	case strings.Contains(ua, "crkey") || u.OS.Name == OSRoku || strings.Contains(ua, "neo-x"):
+		u.DeviceType = DeviceMediaHub
+
+	case strings.Contains(ua, "nexus player"):
+		u.DeviceType = DeviceConsole
+
+	case u.OS.Platform == PlatformPlaystation || u.OS.Platform == PlatformXbox || u.OS.Platform == PlatformNintendo:
+		u.DeviceType = DeviceConsole
 
 	case u.OS.Platform == PlatformWindows || u.OS.Platform == PlatformMac || u.OS.Name == OSChromeOS:
 		if strings.Contains(ua, "mobile") || strings.Contains(ua, "touch") {
@@ -218,9 +226,6 @@ func (u *UserAgent) parseDevice(ua string) {
 		}
 
 		u.DeviceType = DevicePhone // default to phone
-
-	case u.OS.Platform == PlatformPlaystation || u.OS.Platform == PlatformXbox || u.OS.Platform == PlatformNintendo:
-		u.DeviceType = DeviceConsole
 
 	case strings.Contains(ua, "glass") || strings.Contains(ua, "watch") || strings.Contains(ua, "sm-v"):
 		u.DeviceType = DeviceWearable

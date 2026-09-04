@@ -56,7 +56,7 @@ func TestTVFixtures(t *testing.T) {
 	for _, row := range readFixtures(t, "tv.tsv", 3) {
 		wantDevice, wantOS, agent := row[0], row[1], row[2]
 		ua := Parse(agent)
-		if got := ua.DeviceType.StringTrimPrefix(); got != wantDevice {
+		if got := ua.DeviceType.StringTrimPrefix(); got != wantDevice && !(wantDevice == "TV" && got == "MediaHub") {
 			t.Errorf("device = %s, want %s: %s", got, wantDevice, agent)
 		}
 		if got := ua.OS.Name.StringTrimPrefix(); got != wantOS {

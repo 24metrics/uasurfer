@@ -20,6 +20,11 @@ func (u *UserAgent) parseBrowserName(ua string) bool {
 		return u.applyBotDefaults()
 	}
 
+	if strings.Contains(ua, "dalvik/") {
+		u.Browser.Name = BrowserAndroid
+		return u.applyBotDefaults()
+	}
+
 	if strings.Contains(ua, "applewebkit") {
 		inApp := webkitApp(ua)
 		switch {
@@ -156,6 +161,8 @@ func (u *UserAgent) parseBrowserVersion(ua string) {
 	}
 
 	switch u.Browser.Name {
+	case BrowserAndroid:
+		_ = u.Browser.Version.parseAfter(ua, "dalvik/")
 	case BrowserChrome:
 		// match both chrome and crios
 		_ = u.Browser.Version.parseAfter(ua, "chrome/", "crios/", "crmo/")
@@ -227,5 +234,7 @@ func (u *UserAgent) parseBrowserVersion(ua string) {
 		_ = u.Browser.Version.parseAfter(ua, "huaweibrowser/")
 	case BrowserDuckDuckGo:
 		_ = u.Browser.Version.parseAfter(ua, "duckduckgo/")
+	case BrowserNintendo:
+		_ = u.Browser.Version.parseAfter(ua, "nintendobrowser/")
 	}
 }

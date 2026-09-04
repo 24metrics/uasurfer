@@ -23,6 +23,7 @@ const (
 	DeviceConsole
 	DeviceWearable
 	DeviceTV
+	DeviceMediaHub
 
 	// _deviceTypeFinal terminates the list so tests can enumerate it; keep it last.
 	_deviceTypeFinal
@@ -42,6 +43,8 @@ func (d DeviceType) String() string {
 		return "DeviceWearable"
 	case DeviceTV:
 		return "DeviceTV"
+	case DeviceMediaHub:
+		return "DeviceMediaHub"
 	default:
 		// anything out of range, including a value cast from a newer
 		// release, reads as unknown rather than a numeric placeholder
@@ -399,6 +402,7 @@ type Version struct {
 	Major int
 	Minor int
 	Patch int
+	Extra string
 }
 
 // Less reports whether v sorts before c, comparing major, then minor, then patch.

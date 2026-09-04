@@ -67,36 +67,36 @@ func TestParseWithClientHints(t *testing.T) {
 		wantDevice DeviceType
 		wantOS     Version
 	}{
-		{"no hints leaves the agent alone", androidPhone, Hints{}, DevicePhone, Version{10, 0, 0}},
+		{"no hints leaves the agent alone", androidPhone, Hints{}, DevicePhone, Version{10, 0, 0, ""}},
 
 		{"form factor settles a phone that reads as a tablet", androidTablet,
-			Hints{FormFactors: `"Mobile"`}, DevicePhone, Version{10, 0, 0}},
+			Hints{FormFactors: `"Mobile"`}, DevicePhone, Version{10, 0, 0, ""}},
 		{"and a tablet that reads as a phone", androidPhone,
-			Hints{FormFactors: `"Tablet"`}, DeviceTablet, Version{10, 0, 0}},
+			Hints{FormFactors: `"Tablet"`}, DeviceTablet, Version{10, 0, 0, ""}},
 		{"a watch says so outright", androidPhone,
-			Hints{FormFactors: `"Watch"`}, DeviceWearable, Version{10, 0, 0}},
+			Hints{FormFactors: `"Watch"`}, DeviceWearable, Version{10, 0, 0, ""}},
 		{"the first value we know of a list wins", androidPhone,
-			Hints{FormFactors: `"EInk", "Tablet"`}, DeviceTablet, Version{10, 0, 0}},
+			Hints{FormFactors: `"EInk", "Tablet"`}, DeviceTablet, Version{10, 0, 0, ""}},
 		{"a form factor with no constant changes nothing", androidPhone,
-			Hints{FormFactors: `"Automotive"`}, DevicePhone, Version{10, 0, 0}},
+			Hints{FormFactors: `"Automotive"`}, DevicePhone, Version{10, 0, 0, ""}},
 		{"and none of them overrule a television", fireTV,
-			Hints{FormFactors: `"Desktop"`, Mobile: "?0"}, DeviceTV, Version{9, 0, 0}},
+			Hints{FormFactors: `"Desktop"`, Mobile: "?0"}, DeviceTV, Version{9, 0, 0, ""}},
 
 		{"?0 makes a tablet of an Android phone", androidPhone,
-			Hints{Mobile: "?0"}, DeviceTablet, Version{10, 0, 0}},
+			Hints{Mobile: "?0"}, DeviceTablet, Version{10, 0, 0, ""}},
 		{"?1 makes a phone of a desktop", mac,
-			Hints{Mobile: "?1"}, DevicePhone, Version{10, 15, 7}},
+			Hints{Mobile: "?1"}, DevicePhone, Version{10, 15, 7, ""}},
 
 		// Chromium freezes both of these in the agent, so the hint is the only
 		// place the real version appears.
 		{"the platform version unfreezes macOS", mac,
-			Hints{Platform: `"macOS"`, PlatformVersion: `"14.5.0"`}, DeviceComputer, Version{14, 5, 0}},
+			Hints{Platform: `"macOS"`, PlatformVersion: `"14.5.0"`}, DeviceComputer, Version{14, 5, 0, ""}},
 		{"and Android", androidPhone,
-			Hints{Platform: `"Android"`, PlatformVersion: `"14.0.0"`}, DevicePhone, Version{14, 0, 0}},
+			Hints{Platform: `"Android"`, PlatformVersion: `"14.0.0"`}, DevicePhone, Version{14, 0, 0, ""}},
 		{"but not when the platform disagrees with the agent", mac,
-			Hints{Platform: `"Android"`, PlatformVersion: `"14.0.0"`}, DeviceComputer, Version{10, 15, 7}},
+			Hints{Platform: `"Android"`, PlatformVersion: `"14.0.0"`}, DeviceComputer, Version{10, 15, 7, ""}},
 		{"Windows is left to the NT version the agent states", mac,
-			Hints{Platform: `"Windows"`, PlatformVersion: `"13.0.0"`}, DeviceComputer, Version{10, 15, 7}},
+			Hints{Platform: `"Windows"`, PlatformVersion: `"13.0.0"`}, DeviceComputer, Version{10, 15, 7, ""}},
 	}
 
 	for _, tt := range tests {

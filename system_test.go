@@ -112,12 +112,12 @@ func TestParseWindowsVersions(t *testing.T) {
 		name     OSName
 		version  Version
 	}{
-		{"mozilla/5.0 (windows nt 10.0; win64; x64)", PlatformWindows, OSWindows, Version{10, 0, 0}},
-		{"mozilla/5.0 (windows nt 6.1; wow64)", PlatformWindows, OSWindows, Version{6, 1, 0}},
-		{"mozilla/4.0 (compatible; msie 6.0; windows xp)", PlatformWindows, OSWindows, Version{5, 1, 0}},
+		{"mozilla/5.0 (windows nt 10.0; win64; x64)", PlatformWindows, OSWindows, Version{10, 0, 0, ""}},
+		{"mozilla/5.0 (windows nt 6.1; wow64)", PlatformWindows, OSWindows, Version{6, 1, 0, ""}},
+		{"mozilla/4.0 (compatible; msie 6.0; windows xp)", PlatformWindows, OSWindows, Version{5, 1, 0, ""}},
 		// xbox reads as windows and defaults to 6.0 when no nt version is given
-		{"mozilla/5.0 (windows nt 10.0; win64; x64; xbox; xbox one)", PlatformXbox, OSXbox, Version{10, 0, 0}},
-		{"mozilla/5.0 (xbox; windows )", PlatformXbox, OSXbox, Version{6, 0, 0}},
+		{"mozilla/5.0 (windows nt 10.0; win64; x64; xbox; xbox one)", PlatformXbox, OSXbox, Version{10, 0, 0, ""}},
+		{"mozilla/5.0 (xbox; windows )", PlatformXbox, OSXbox, Version{6, 0, 0, ""}},
 		// "windows" with no version at all
 		{"mozilla/5.0 (compatible; microsoft-cryptoapi/10.0)", PlatformWindows, OSUnknown, Version{}},
 	}
@@ -154,7 +154,7 @@ func TestVersionParseOverflow(t *testing.T) {
 	// and the cap must not disturb versions anyone actually ships
 	var v Version
 	v.parse("126.0.6478.126")
-	if v != (Version{126, 0, 6478}) {
+	if v != (Version{126, 0, 6478, ""}) {
 		t.Errorf("parse(%q) = %v, want {126 0 6478}", "126.0.6478.126", v)
 	}
 }
@@ -166,17 +166,17 @@ func TestVersionParse(t *testing.T) {
 		ok   bool
 	}{
 		// the separator is whatever byte ends the digit run
-		{"126.0.6478.126", Version{126, 0, 6478}, true},
-		{"10_15_7", Version{10, 15, 7}, true},
-		{"6.1", Version{6, 1, 0}, true},
-		{"11", Version{11, 0, 0}, true},
+		{"126.0.6478.126", Version{126, 0, 6478, ""}, true},
+		{"10_15_7", Version{10, 15, 7, ""}, true},
+		{"6.1", Version{6, 1, 0, ""}, true},
+		{"11", Version{11, 0, 0, ""}, true},
 		// the run ends where the next field begins
-		{"4.0 mobile safari/537.36", Version{4, 0, 0}, true},
-		{"12.5 (12.5.5.4405-46)", Version{12, 5, 0}, true},
+		{"4.0 mobile safari/537.36", Version{4, 0, 0, ""}, true},
+		{"12.5 (12.5.5.4405-46)", Version{12, 5, 0, ""}, true},
 		// a component that starts on a non-digit is zero, and does not reach
 		// forward for the next number in the string
-		{"1..2", Version{1, 0, 2}, true},
-		{"9", Version{9, 0, 0}, true},
+		{"1..2", Version{1, 0, 2, ""}, true},
+		{"9", Version{9, 0, 0, ""}, true},
 		// no leading digit at all is a miss, which is how parseAfter tells a
 		// marker worth following from one that led nowhere
 		{"", Version{}, false},
@@ -208,20 +208,20 @@ func TestVersionParseZeroPadded(t *testing.T) {
 		in   string
 		want Version
 	}{
-		{"4.08", Version{4, 0, 8}},
-		{"4.8", Version{4, 8, 0}},
-		{"9.01", Version{9, 0, 1}},
-		{"9.1", Version{9, 1, 0}},
-		{"9.10", Version{9, 10, 0}},
-		{"5.01", Version{5, 0, 1}},
-		{"5.5", Version{5, 5, 0}},
+		{"4.08", Version{4, 0, 8, ""}},
+		{"4.8", Version{4, 8, 0, ""}},
+		{"9.01", Version{9, 0, 1, ""}},
+		{"9.1", Version{9, 1, 0, ""}},
+		{"9.10", Version{9, 10, 0, ""}},
+		{"5.01", Version{5, 0, 1, ""}},
+		{"5.5", Version{5, 5, 0, ""}},
 		// padding in the major reads the same way
-		{"04.1", Version{0, 4, 1}},
-		{"0001", Version{0, 1, 0}},
+		{"04.1", Version{0, 4, 1, ""}},
+		{"0001", Version{0, 1, 0, ""}},
 		// a component of nothing but zeroes is just zero, which is most of what
 		// actually ships: these mean what they look like
-		{"5.00", Version{5, 0, 0}},
-		{"126.0.0.0", Version{126, 0, 0}},
+		{"5.00", Version{5, 0, 0, ""}},
+		{"126.0.0.0", Version{126, 0, 0, ""}},
 		{"0", Version{}},
 		{"0.0.0", Version{}},
 	}
@@ -237,8 +237,8 @@ func TestVersionParseZeroPadded(t *testing.T) {
 // parseAfter does when an earlier marker matched and a later one is tried - does
 // not keep a digit from the previous one.
 func TestVersionParseOverwrites(t *testing.T) {
-	v := Version{9, 9, 9}
-	if !v.parse("1") || v != (Version{1, 0, 0}) {
+	v := Version{9, 9, 9, ""}
+	if !v.parse("1") || v != (Version{1, 0, 0, ""}) {
 		t.Errorf("parse over a used Version = %v, want {1 0 0}", v)
 	}
 }
@@ -250,11 +250,11 @@ func TestTVOSVersions(t *testing.T) {
 		agent string
 		want  Version
 	}{
-		{"AppleTV6,2/11.1", Version{11, 1, 0}},
-		{"AppleTV/1.1", Version{1, 1, 0}},
-		{"AppleCoreMedia/1.0.0.12F69 (Apple TV; U; CPU OS 8_3 like Mac OS X; en_us)", Version{8, 3, 0}},
-		{"Roku/DVP-12.5 (12.5.5.4405-46)", Version{12, 5, 0}},
-		{"Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/537.36 (KHTML, like Gecko) TV Safari/537.36", Version{6, 0, 0}},
+		{"AppleTV6,2/11.1", Version{11, 1, 0, ""}},
+		{"AppleTV/1.1", Version{1, 1, 0, ""}},
+		{"AppleCoreMedia/1.0.0.12F69 (Apple TV; U; CPU OS 8_3 like Mac OS X; en_us)", Version{8, 3, 0, ""}},
+		{"Roku/DVP-12.5 (12.5.5.4405-46)", Version{12, 5, 0, ""}},
+		{"Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/537.36 (KHTML, like Gecko) TV Safari/537.36", Version{6, 0, 0, ""}},
 	}
 	for _, tt := range tests {
 		if got := Parse(tt.agent).OS.Version; got != tt.want {
