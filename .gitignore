@@ -54,15 +54,12 @@ Thumbs.db
 # Dev Tools #
 ######################
 .vagrant
-
-
-# Others #
-######################
+# Fuzzing artefacts. A crasher belongs in a named test in the relevant
+# _test.go file, not in a generated seed file: see TestVersionParseOverflow,
+# which is what FuzzParse found here.
+testdata/fuzz/
 .idea/
 
-# Reference corpora downloaded by cmd/uacompare. Not committed: the Matomo
-# fixtures carry the LGPL, and fetching them locally to measure against is use
-# rather than redistribution.
-######################
+# Reference corpora downloaded by cmd/uacompare.
 testdata/matomo/
 testdata/uap-core/

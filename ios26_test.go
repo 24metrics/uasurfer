@@ -1,9 +1,8 @@
 package uasurfer
 
 import (
+	"reflect"
 	"testing"
-
-	"github.com/google/go-cmp/cmp"
 )
 
 // The iOS family reports a frozen platform token. Parse passes it through, and
@@ -35,12 +34,12 @@ func TestIOS26AndBrowserTokens(t *testing.T) {
 			name: "ambiguous bare WKWebView",
 			ua:   "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
 			want: UserAgent{
-				Browser{BrowserUnknown, Version{}},
+				Browser{BrowserSafari, Version{18, 7, 0, ""}},
 				OS{PlatformiPhone, OSiOS, Version{18, 7, 0, ""}},
 				DevicePhone,
 			},
 			wantResolved: UserAgent{
-				Browser{BrowserUnknown, Version{}},
+				Browser{BrowserSafari, Version{18, 7, 0, ""}},
 				OS{PlatformiPhone, OSiOS, Version{18, 7, 0, VersionFrozen}},
 				DevicePhone,
 			},
@@ -92,12 +91,12 @@ func TestIOS26AndBrowserTokens(t *testing.T) {
 			ua:   "Mozilla/5.0 (iPad; CPU OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.2 Mobile/15E148 Safari/604.1",
 			want: UserAgent{
 				Browser{BrowserSafari, Version{26, 2, 0, ""}},
-				OS{PlatformiPad, OSiOS, Version{18, 7, 0, ""}},
+				OS{PlatformiPad, OSiPadOS, Version{18, 7, 0, ""}},
 				DeviceTablet,
 			},
 			wantResolved: UserAgent{
 				Browser{BrowserSafari, Version{26, 2, 0, ""}},
-				OS{PlatformiPad, OSiOS, Version{26, 2, 0, ""}},
+				OS{PlatformiPad, OSiPadOS, Version{26, 2, 0, ""}},
 				DeviceTablet,
 			},
 		},
@@ -150,8 +149,8 @@ func TestIOS26AndBrowserTokens(t *testing.T) {
 				},
 			}
 			for _, parseUA := range plain {
-				if diff := cmp.Diff(test.want, *parseUA(test.ua)); diff != "" {
-					t.Fatalf("Parse result mismatch (-want +got):\n%s", diff)
+				if got := *parseUA(test.ua); !reflect.DeepEqual(got, test.want) {
+					t.Fatalf("Parse result = %+v, want %+v", got, test.want)
 				}
 			}
 
@@ -164,8 +163,8 @@ func TestIOS26AndBrowserTokens(t *testing.T) {
 				},
 			}
 			for _, parseUA := range resolved {
-				if diff := cmp.Diff(test.wantResolved, *parseUA(test.ua)); diff != "" {
-					t.Fatalf("Parse result mismatch (-want +got):\n%s", diff)
+				if got := *parseUA(test.ua); !reflect.DeepEqual(got, test.wantResolved) {
+					t.Fatalf("Parse result = %+v, want %+v", got, test.wantResolved)
 				}
 			}
 		})

@@ -5,9 +5,10 @@
 // strings.
 package uasurfer
 
-import "strings"
-
-//go:generate stringer -type=DeviceType,BrowserName,OSName,Platform -output=const_string.go
+import (
+	"cmp"
+	"strings"
+)
 
 // DeviceType (int) returns a constant.
 type DeviceType int
@@ -23,7 +24,33 @@ const (
 	DeviceWearable
 	DeviceTV
 	DeviceMediaHub
+
+	// _deviceTypeFinal terminates the list so tests can enumerate it; keep it last.
+	_deviceTypeFinal
 )
+
+func (d DeviceType) String() string {
+	switch d {
+	case DeviceComputer:
+		return "DeviceComputer"
+	case DeviceTablet:
+		return "DeviceTablet"
+	case DevicePhone:
+		return "DevicePhone"
+	case DeviceConsole:
+		return "DeviceConsole"
+	case DeviceWearable:
+		return "DeviceWearable"
+	case DeviceTV:
+		return "DeviceTV"
+	case DeviceMediaHub:
+		return "DeviceMediaHub"
+	default:
+		// anything out of range, including a value cast from a newer
+		// release, reads as unknown rather than a numeric placeholder
+		return "DeviceUnknown"
+	}
+}
 
 // StringTrimPrefix is like String() but trims the "Device" prefix
 func (d DeviceType) StringTrimPrefix() string {
@@ -69,15 +96,153 @@ const (
 	BrowserTwitterBot
 	BrowserYandexBot
 	BrowserCocCocBot
-	BrowserYahooBot // Bot list ends here
+	BrowserYahooBot
+	BrowserOpenAIBot
+	BrowserAnthropicBot
+	BrowserPerplexityBot
+	BrowserAmazonBot
+	BrowserBytedanceBot
+	BrowserCommonCrawlBot
+	BrowserAhrefsBot
+	BrowserSemrushBot
+	BrowserPetalBot
+
+	// In-app webviews. A tap on a link inside one of these apps renders in a
+	// frame the app controls, with no address bar and its own idea of a viewport,
+	// which is a different surface to measure than the browser it is built on.
 	BrowserFacebook
 	BrowserInstagram
 	BrowserWeChat
 	BrowserTikTok
 	BrowserSnapchat
 	BrowserLine
+
+	// Chromium with another name on it. The engine is Chrome's; the vendor,
+	// release cadence and default settings are not.
+	BrowserVivaldi
+	BrowserWhale
+	BrowserMIUI
+	BrowserHuawei
 	BrowserDuckDuckGo
+
+	// _browserNameFinal terminates the list so tests can enumerate it; keep it last.
+	_browserNameFinal
 )
+
+func (b BrowserName) String() string {
+	switch b {
+	case BrowserChrome:
+		return "BrowserChrome"
+	case BrowserIE:
+		return "BrowserIE"
+	case BrowserSafari:
+		return "BrowserSafari"
+	case BrowserFirefox:
+		return "BrowserFirefox"
+	case BrowserAndroid:
+		return "BrowserAndroid"
+	case BrowserOpera:
+		return "BrowserOpera"
+	case BrowserBlackberry:
+		return "BrowserBlackberry"
+	case BrowserUCBrowser:
+		return "BrowserUCBrowser"
+	case BrowserSilk:
+		return "BrowserSilk"
+	case BrowserNokia:
+		return "BrowserNokia"
+	case BrowserNetFront:
+		return "BrowserNetFront"
+	case BrowserQQ:
+		return "BrowserQQ"
+	case BrowserMaxthon:
+		return "BrowserMaxthon"
+	case BrowserSogouExplorer:
+		return "BrowserSogouExplorer"
+	case BrowserSpotify:
+		return "BrowserSpotify"
+	case BrowserNintendo:
+		return "BrowserNintendo"
+	case BrowserSamsung:
+		return "BrowserSamsung"
+	case BrowserYandex:
+		return "BrowserYandex"
+	case BrowserCocCoc:
+		return "BrowserCocCoc"
+	case BrowserBot:
+		return "BrowserBot"
+	case BrowserAppleBot:
+		return "BrowserAppleBot"
+	case BrowserBaiduBot:
+		return "BrowserBaiduBot"
+	case BrowserBingBot:
+		return "BrowserBingBot"
+	case BrowserDuckDuckGoBot:
+		return "BrowserDuckDuckGoBot"
+	case BrowserFacebookBot:
+		return "BrowserFacebookBot"
+	case BrowserGoogleBot:
+		return "BrowserGoogleBot"
+	case BrowserLinkedInBot:
+		return "BrowserLinkedInBot"
+	case BrowserMsnBot:
+		return "BrowserMsnBot"
+	case BrowserPingdomBot:
+		return "BrowserPingdomBot"
+	case BrowserTwitterBot:
+		return "BrowserTwitterBot"
+	case BrowserYandexBot:
+		return "BrowserYandexBot"
+	case BrowserCocCocBot:
+		return "BrowserCocCocBot"
+	case BrowserYahooBot:
+		return "BrowserYahooBot"
+	case BrowserOpenAIBot:
+		return "BrowserOpenAIBot"
+	case BrowserAnthropicBot:
+		return "BrowserAnthropicBot"
+	case BrowserPerplexityBot:
+		return "BrowserPerplexityBot"
+	case BrowserAmazonBot:
+		return "BrowserAmazonBot"
+	case BrowserBytedanceBot:
+		return "BrowserBytedanceBot"
+	case BrowserCommonCrawlBot:
+		return "BrowserCommonCrawlBot"
+	case BrowserAhrefsBot:
+		return "BrowserAhrefsBot"
+	case BrowserSemrushBot:
+		return "BrowserSemrushBot"
+	case BrowserPetalBot:
+		return "BrowserPetalBot"
+	case BrowserFacebook:
+		return "BrowserFacebook"
+	case BrowserInstagram:
+		return "BrowserInstagram"
+	case BrowserWeChat:
+		return "BrowserWeChat"
+	case BrowserTikTok:
+		return "BrowserTikTok"
+	case BrowserSnapchat:
+		return "BrowserSnapchat"
+	case BrowserLine:
+		return "BrowserLine"
+	case BrowserVivaldi:
+		return "BrowserVivaldi"
+	case BrowserWhale:
+		return "BrowserWhale"
+	case BrowserMIUI:
+		return "BrowserMIUI"
+	case BrowserHuawei:
+		return "BrowserHuawei"
+	case BrowserDuckDuckGo:
+		return "BrowserDuckDuckGo"
+	default:
+		// anything out of range, including a value cast from a newer
+		// release, reads as unknown rather than a numeric placeholder
+		return "BrowserUnknown"
+	}
+}
 
 // StringTrimPrefix is like String() but trims the "Browser" prefix
 func (b BrowserName) StringTrimPrefix() string {
@@ -97,6 +262,7 @@ const (
 	OSWindows
 	OSMacOSX
 	OSiOS
+	OSiPadOS
 	OSAndroid
 	OSBlackberry
 	OSChromeOS
@@ -107,7 +273,58 @@ const (
 	OSXbox
 	OSNintendo
 	OSBot
+	OSTizen // Samsung smart TVs, and the handful of Tizen phones
+	OSRoku
+	OSTvOS
+
+	// _osNameFinal terminates the list so tests can enumerate it; keep it last.
+	_osNameFinal
 )
+
+func (o OSName) String() string {
+	switch o {
+	case OSWindowsPhone:
+		return "OSWindowsPhone"
+	case OSWindows:
+		return "OSWindows"
+	case OSMacOSX:
+		return "OSMacOSX"
+	case OSiOS:
+		return "OSiOS"
+	case OSiPadOS:
+		return "OSiPadOS"
+	case OSAndroid:
+		return "OSAndroid"
+	case OSBlackberry:
+		return "OSBlackberry"
+	case OSChromeOS:
+		return "OSChromeOS"
+	case OSKindle:
+		return "OSKindle"
+	case OSWebOS:
+		return "OSWebOS"
+	case OSLinux:
+		return "OSLinux"
+	case OSPlaystation:
+		return "OSPlaystation"
+	case OSXbox:
+		return "OSXbox"
+	case OSNintendo:
+		return "OSNintendo"
+	case OSBot:
+		return "OSBot"
+	case OSTizen:
+		return "OSTizen"
+	case OSRoku:
+		return "OSRoku"
+	case OSTvOS:
+		return "OSTvOS"
+	default:
+		// anything out of range, including a value cast from a newer
+		// release, reads as unknown rather than a numeric placeholder
+		return "OSUnknown"
+	}
+}
 
 // StringTrimPrefix is like String() but trims the "OS" prefix
 func (o OSName) StringTrimPrefix() string {
@@ -135,7 +352,46 @@ const (
 	PlatformXbox
 	PlatformNintendo
 	PlatformBot
+	PlatformAppleTV
+
+	// _platformFinal terminates the list so tests can enumerate it; keep it last.
+	_platformFinal
 )
+
+func (p Platform) String() string {
+	switch p {
+	case PlatformWindows:
+		return "PlatformWindows"
+	case PlatformMac:
+		return "PlatformMac"
+	case PlatformLinux:
+		return "PlatformLinux"
+	case PlatformiPad:
+		return "PlatformiPad"
+	case PlatformiPhone:
+		return "PlatformiPhone"
+	case PlatformiPod:
+		return "PlatformiPod"
+	case PlatformBlackberry:
+		return "PlatformBlackberry"
+	case PlatformWindowsPhone:
+		return "PlatformWindowsPhone"
+	case PlatformPlaystation:
+		return "PlatformPlaystation"
+	case PlatformXbox:
+		return "PlatformXbox"
+	case PlatformNintendo:
+		return "PlatformNintendo"
+	case PlatformBot:
+		return "PlatformBot"
+	case PlatformAppleTV:
+		return "PlatformAppleTV"
+	default:
+		// anything out of range, including a value cast from a newer
+		// release, reads as unknown rather than a numeric placeholder
+		return "PlatformUnknown"
+	}
+}
 
 // StringTrimPrefix is like String() but trims the "Platform" prefix
 func (p Platform) StringTrimPrefix() string {
@@ -149,47 +405,13 @@ type Version struct {
 	Extra string
 }
 
-// VersionFrozen is the marker Parse(ua, true) assigns to OS.Version.Extra when
-// it keeps an OS version that the browser reports as a constant for every
-// release. The numbers are the ones stated in the user agent, so they remain
-// usable, while the marker says they cannot be read as the version of the system
-// in front of the user.
-//
-// Browser.Version.Extra retains its existing meaning: components beyond the
-// patch level. IsFrozen should therefore be used on an OS version produced by
-// Parse(ua, true), not as a general classifier for arbitrary Version values.
-// A macOS floor is not encoded in Extra; MinimumMacOSVersion returns it as a
-// separate Version without changing the parsed UserAgent.
-const VersionFrozen = "frozen"
-
-// IsFrozen reports whether this version is a constant the browser reports for
-// every release rather than the version of the system, which is the case for the
-// iOS-family and desktop platform tokens that Apple, Google and Mozilla cap.
-//
-// Only Parse(ua, true) sets the marker. Without the flag Parse states what the
-// user agent says, so use IsFrozenOSVersion there.
-func (v Version) IsFrozen() bool {
-	return v.Extra == VersionFrozen
-}
-
+// Less reports whether v sorts before c, comparing major, then minor, then patch.
 func (v Version) Less(c Version) bool {
-	if v.Major < c.Major {
-		return true
-	}
-
-	if v.Major > c.Major {
-		return false
-	}
-
-	if v.Minor < c.Minor {
-		return true
-	}
-
-	if v.Minor > c.Minor {
-		return false
-	}
-
-	return v.Patch < c.Patch
+	return cmp.Or(
+		cmp.Compare(v.Major, c.Major),
+		cmp.Compare(v.Minor, c.Minor),
+		cmp.Compare(v.Patch, c.Patch),
+	) < 0
 }
 
 type UserAgent struct {
@@ -198,6 +420,10 @@ type UserAgent struct {
 	DeviceType DeviceType
 }
 
+// Browser contains the name of the browser and its version. Browsers are
+// grouped without consideration for device: Chrome (Chrome/43.0) and Chrome for
+// iOS (CriOS/43.0) both report as BrowserChrome with version 43.0, and Internet
+// Explorer 11 and Edge 12 both report as BrowserIE with version 11 or 12.
 type Browser struct {
 	Name    BrowserName
 	Version Version
@@ -209,66 +435,53 @@ type OS struct {
 	Version  Version
 }
 
-// OSVersionDetails describes the OS-version information that can be derived
-// from a user agent without replacing the value it actually reports.
-type OSVersionDetails struct {
-	// Reported is the OS version stated in the user agent, identical to
-	// Parse(rawUA).OS.Version. It never carries VersionFrozen.
-	Reported Version
-
-	// Minimum is a conservative macOS floor derived from Safari's version, or
-	// the zero Version when no floor can be established.
-	Minimum Version
-
-	// Frozen reports whether Reported is a known constant rather than a
-	// reliable measurement of the current OS version.
-	Frozen bool
-}
-
 // Reset resets the UserAgent to it's zero value
-func (ua *UserAgent) Reset() {
-	ua.Browser = Browser{}
-	ua.OS = OS{}
-	ua.DeviceType = DeviceUnknown
+func (u *UserAgent) Reset() {
+	u.Browser = Browser{}
+	u.OS = OS{}
+	u.DeviceType = DeviceUnknown
 }
+
+// botNames marks the BrowserName values that identify a bot, by the one thing
+// every such constant has in common: its name ends in "Bot".
+//
+// A set rather than the range this used to be. The range required the bot
+// constants to be contiguous and last, which meant a new browser could only be
+// added by inserting it ahead of them and shifting their values - and callers
+// persist those values as ints. Now either list grows by appending, and a
+// constant named "…Bot" is a bot with nothing else to remember;
+// TestIsBot asserts exactly that correspondence.
+var botNames = func() (set [_browserNameFinal]bool) {
+	for b := range _browserNameFinal {
+		set[b] = strings.HasSuffix(b.String(), "Bot")
+	}
+	return
+}()
 
 // IsBot returns true if the UserAgent represent a bot
-func (ua *UserAgent) IsBot() bool {
-	if ua.Browser.Name >= BrowserBot && ua.Browser.Name <= BrowserYahooBot {
-		return true
-	}
-	if ua.OS.Name == OSBot {
-		return true
-	}
-	if ua.OS.Platform == PlatformBot {
-		return true
-	}
-	return false
+func (u *UserAgent) IsBot() bool {
+	// A name cast from a newer release can be out of range, and reads as no bot
+	// rather than panicking.
+	return (u.Browser.Name >= 0 && u.Browser.Name < _browserNameFinal && botNames[u.Browser.Name]) ||
+		u.OS.Name == OSBot ||
+		u.OS.Platform == PlatformBot
 }
 
-// Parse accepts a raw user agent (string) and returns the UserAgent.
-//
-// Called with one argument it reports what the user agent states and applies no
-// heuristics, so an OS version that the browser reports as a frozen constant is
-// passed through unchanged. Use IsFrozenOSVersion to recognise such a value.
-//
-// The optional resolveFrozenOSVersion asks for that constant to be dealt with
-// instead of passed through. An iOS user agent whose platform token is frozen then
-// takes its OS version from full Safari's own version, which tracks the iOS
-// release, and keeps the stated numbers with the VersionFrozen marker where no such
-// hint exists, as in a WKWebView, an in-app browser or a third-party browser. On
-// macOS nothing can be recovered, so the value is only marked. The result is then
-// no longer a plain reading of the user agent, which is why this has to be asked
-// for.
-//
-//	Parse(ua)        // as stated
-//	Parse(ua, false) // identical
-//	Parse(ua, true)  // resolved where possible, marked otherwise
-//
-// Only the first value is read; any further ones are ignored.
+// Parse accepts a raw user agent and returns the UserAgent. Passing true marks
+// frozen Apple OS versions, resolving full Safari versions where possible.
 func Parse(ua string, resolveFrozenOSVersion ...bool) *UserAgent {
 	dest := new(UserAgent)
-	parse(ua, dest, firstFlag(resolveFrozenOSVersion))
+	parse(ua, nil, dest)
+	if firstFlag(resolveFrozenOSVersion) {
+		resolveFrozenOS(ua, dest)
+	}
+	return dest
+}
+
+// ParseWithHints is the same as Parse, but accepts a Hints struct.
+func ParseWithHints(ua string, hints *Hints) *UserAgent {
+	dest := new(UserAgent)
+	parse(ua, hints, dest)
 	return dest
 }
 
@@ -276,33 +489,38 @@ func Parse(ua string, resolveFrozenOSVersion ...bool) *UserAgent {
 // It is the caller's responsibility to call Reset() on the UserAgent before
 // passing it to this function.
 func ParseUserAgent(ua string, dest *UserAgent, resolveFrozenOSVersion ...bool) {
-	parse(ua, dest, firstFlag(resolveFrozenOSVersion))
-}
-
-func firstFlag(flags []bool) bool {
-	return len(flags) > 0 && flags[0]
-}
-
-func parse(ua string, dest *UserAgent, resolveFrozenOSVersion bool) {
-	ua = normalise(ua)
-	switch {
-	case len(ua) == 0:
-		dest.OS.Platform = PlatformUnknown
-		dest.OS.Name = OSUnknown
-		dest.Browser.Name = BrowserUnknown
-		dest.DeviceType = DeviceUnknown
-
-	// stop on on first case returning true
-	case dest.evalOS(ua, resolveFrozenOSVersion):
-	case dest.evalBrowserName(ua):
-	default:
-		dest.evalBrowserVersion(ua)
-		dest.evalDevice(ua)
+	parse(ua, nil, dest)
+	if firstFlag(resolveFrozenOSVersion) {
+		resolveFrozenOS(ua, dest)
 	}
+}
+
+// ParseUserAgentWithHints is the same as ParseUserAgent, but accepts a Hints struct.
+func ParseUserAgentWithHints(ua string, hints *Hints, dest *UserAgent) {
+	parse(ua, hints, dest)
+}
+
+func parse(ua string, hints *Hints, dest *UserAgent) {
+	ua = normalise(ua)
+	if len(ua) == 0 {
+		return // dest keeps its zero (Unknown) values
+	}
+	// each parse* reports a bot, which needs nothing further parsed
+	if dest.parseOS(ua, hints) || dest.parseBrowserName(ua) {
+		return
+	}
+	dest.parseBrowserVersion(ua)
+	dest.parseDevice(ua)
+	hints.apply(dest)
 }
 
 // normalise normalises the user supplied agent string so that
 // we can more easily parse it.
+//
+// The returned string is the parser's one remaining allocation: buf itself is
+// stack allocated, but converting it to a string that outlives this frame is
+// not something the compiler can keep on the stack. Removing it would mean
+// parsing over []byte throughout rather than string.
 func normalise(ua string) string {
 	if len(ua) <= 1024 {
 		var buf [1024]byte

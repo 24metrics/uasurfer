@@ -1,127 +1,180 @@
 package uasurfer
 
 import (
-	"regexp"
-	"strconv"
 	"strings"
 )
 
-var (
-	amazonFireFingerprint = regexp.MustCompile(`\s(k[a-z]{3,5}|sd\d{4}ur)\s`) //tablet or phone
-)
+// isAmazonFire reports whether s carries a whitespace delimited Amazon Fire
+// tablet or phone model token. It is equivalent to the regexp it replaced,
+// `\s(k[a-z]{3,5}|sd\d{4}ur)\s`, which TestIsAmazonFire pins down by
+// differential testing against that pattern.
+//
+// Hand rolled rather than compiled because handing the agent to regexp makes it
+// escape, which in turn forces parse's normalise buffer onto the heap - the
+// regexp was single-handedly costing every parse an allocation.
+func isAmazonFire(s string) bool {
+	for i := 0; i+1 < len(s); i++ {
+		if !isSpace(s[i]) {
+			continue
+		}
+		n := amazonFireToken(s[i+1:])
+		if n > 0 && i+1+n < len(s) && isSpace(s[i+1+n]) {
+			return true
+		}
+	}
+	return false
+}
 
-func (u *UserAgent) evalOS(ua string, resolveFrozenOSVersion bool) bool {
-	// This is a subjective parsing for cfnetwork user agents.
-	// For us, we consider this as iOS from in-app browsers.
-	if strings.Contains(ua, "cfnetwork/") {
-		u.OS.Platform = PlatformUnknown
-		u.OS.Name = OSiOS
-		return u.maybeBot()
+// amazonFireToken returns the length of the model token at the start of s, or 0
+// if there is none. Matching is greedy: for the "k" form the letter run is
+// consumed up to the 5 the pattern allows, and a longer run simply fails the
+// caller's trailing whitespace check, exactly as the regexp's backtracking did
+// (every shorter prefix ends on a letter, never on whitespace).
+func amazonFireToken(s string) int {
+	if len(s) > 0 && s[0] == 'k' {
+		n := 1
+		for n < len(s) && n <= 5 && isLower(s[n]) {
+			n++
+		}
+		if n >= 4 { // "k" plus at least three letters
+			return n
+		}
+		return 0
 	}
 
-	s := strings.IndexRune(ua, '(')
-	e := strings.IndexRune(ua, ')')
-	if s > e {
-		s = 0
+	// sd<4 digits>ur
+	if len(s) >= 8 && s[0] == 's' && s[1] == 'd' && s[6] == 'u' && s[7] == 'r' &&
+		isDigit(s[2]) && isDigit(s[3]) && isDigit(s[4]) && isDigit(s[5]) {
+		return 8
+	}
+	return 0
+}
+
+// isSpace matches regexp's \s class: [\t\n\f\r ].
+func isSpace(c byte) bool { return c == ' ' || c == '\t' || c == '\n' || c == '\f' || c == '\r' }
+func isLower(c byte) bool { return c >= 'a' && c <= 'z' }
+func isDigit(c byte) bool { return c >= '0' && c <= '9' }
+
+// platformGroup returns the text between the first parentheses. When the closing
+// paren is missing or precedes the opening one, the group runs to the end of the
+// agent instead. Only e moves: s still points at the opening paren (or -1 when
+// there is none), so the s+1 below skips that paren rather than the agent's
+// first byte.
+func platformGroup(ua string) string {
+	s := strings.IndexByte(ua, '(')
+	e := strings.IndexByte(ua, ')')
+	if e == -1 || s > e {
 		e = len(ua)
 	}
-	if e == -1 {
-		e = len(ua)
-	}
+	return ua[s+1 : e]
+}
 
-	agentPlatform := ua[s+1 : e]
-	specsEnd := strings.Index(agentPlatform, ";")
-	var specs string
-	if specsEnd != -1 {
-		specs = agentPlatform[:specsEnd]
-	} else {
-		specs = agentPlatform
-	}
+func (u *UserAgent) parseOS(ua string, hints *Hints) bool {
+	agentPlatform := platformGroup(ua)
+	// Cut returns the whole string when there is no ";", which is what we want.
+	specs, _, _ := strings.Cut(agentPlatform, ";")
 
-	//strict OS & version identification
+	// strict OS & version identification first, by exact specs match; the
+	// broader whole-agent scans below only run when none of them hit.
 	switch {
-	case specs == "android":
-		u.evalLinux(ua, agentPlatform)
+	case specs == "android" || specs == "x11" || specs == "linux":
+		u.parseLinux(ua, agentPlatform)
 
 	case specs == "bb10" || specs == "playbook":
 		u.OS.Platform = PlatformBlackberry
 		u.OS.Name = OSBlackberry
 
-	case specs == "x11" || specs == "linux":
-		u.evalLinux(ua, agentPlatform)
-
-	case strings.HasPrefix(specs, "ipad") || strings.HasPrefix(specs, "iphone") || strings.HasPrefix(specs, "ipod touch") || strings.HasPrefix(specs, "ipod"):
-		u.evaliOS(specs, agentPlatform)
-		if resolveFrozenOSVersion {
-			resolveFrozenIOSVersion(ua, agentPlatform, &u.OS.Version)
-		}
+	case strings.HasPrefix(specs, "ipad") || strings.HasPrefix(specs, "iphone") || strings.HasPrefix(specs, "ipod"):
+		u.parseiOS(specs, agentPlatform)
 
 	case specs == "macintosh":
-		u.evalMacintosh(ua)
-		if resolveFrozenOSVersion {
-			markFrozenMacOSVersion(ua, &u.OS.Version)
-		}
+		u.parseMacintosh(ua, hints)
+
+	// Blackberry
+	case strings.Contains(ua, "blackberry") || strings.Contains(ua, "playbook"):
+		u.OS.Platform = PlatformBlackberry
+		u.OS.Name = OSBlackberry
+
+	// Windows Phone. Xbox agents can contain this token too.
+	case strings.Contains(agentPlatform, "windows phone ") && !strings.Contains(ua, "xbox"):
+		u.parseWindowsPhone(agentPlatform)
+
+	// Windows, Xbox
+	case strings.Contains(ua, "windows ") || strings.Contains(ua, "microsoft-cryptoapi"):
+		u.parseWindows(ua)
+
+	// Kindle
+	case strings.Contains(ua, "kindle/") || isAmazonFire(agentPlatform):
+		u.OS.Platform = PlatformLinux
+		u.OS.Name = OSKindle
+
+	// Linux (broader attempt)
+	case strings.Contains(ua, "linux"):
+		u.parseLinux(ua, agentPlatform)
+
+	// WebOS (non-linux flagged)
+	case isWebOS(ua):
+		u.OS.Platform = PlatformLinux
+		u.OS.Name = OSWebOS
+
+	// Nintendo
+	case strings.Contains(ua, "nintendo"):
+		u.OS.Platform = PlatformNintendo
+		u.OS.Name = OSNintendo
+
+	// Playstation
+	// "vita" is deliberately absent: every real Vita agent says
+	// "PlayStation Vita", and unanchored it reads "VitaMahjong", an iOS
+	// game, as a console.
+	case strings.Contains(ua, "playstation") || strings.Contains(ua, "psp"):
+		u.OS.Platform = PlatformPlaystation
+		u.OS.Name = OSPlaystation
+
+	// Android
+	case strings.Contains(ua, "android"):
+		u.parseLinux(ua, agentPlatform)
+
+	// Apple TV, ahead of the CFNetwork case below: its native apps carry the
+	// same Darwin signature as an iPhone's, and the model is what separates
+	// them. The version follows the model generation ("AppleTV6,2/11.1") or,
+	// for the media player agents, sits in the iOS style "CPU OS" field.
+	case strings.Contains(ua, "appletv") || strings.Contains(ua, "apple tv"):
+		u.OS.Platform = PlatformAppleTV
+		u.OS.Name = OSTvOS
+		u.parseTvOSVersion(ua)
+
+	// Apps that name iOS rather than the device they run on:
+	// "Hulu/9.34.0 (iOS 26.5.1; en_US; iPhone18,2; 23F81)",
+	// "TuneIn Radio/27.1.0 (iPadOS/16.6)". Ahead of CFNetwork, which some of
+	// them also carry, because the version here is the real one.
+	case strings.Contains(agentPlatform, "ipados") || strings.Contains(agentPlatform, "ios ") ||
+		strings.Contains(agentPlatform, "ios/"):
+		u.parseiOSNative(agentPlatform)
+
+	// Apple CFNetwork
+	case strings.Contains(ua, "cfnetwork") && strings.Contains(ua, "darwin"):
+		u.parseAppleNative(ua, hints)
+
+	// Roku, after CFNetwork: the players state their OS version after the
+	// model ("Roku/DVP-12.5", "Roku4640X/DVP-7.70") and never carry Darwin,
+	// while "Roku" on its own is also the remote control app, which runs on
+	// a phone and is caught above.
+	case strings.Contains(ua, "roku"):
+		u.OS.Platform = PlatformLinux
+		u.OS.Name = OSRoku
+		u.OS.Version.parseAfter(ua, "/dvp-", "roku/")
 
 	default:
-		switch {
-		// Blackberry
-		case strings.Contains(ua, "blackberry") || strings.Contains(ua, "playbook"):
-			u.OS.Platform = PlatformBlackberry
-			u.OS.Name = OSBlackberry
-
-		// Windows Phone
-		case strings.Contains(agentPlatform, "windows phone ") &&
-			!strings.Contains(agentPlatform, "xbox"): // Xbox one user agents have 'windows phone'
-			u.evalWindowsPhone(agentPlatform)
-
-		// Windows, Xbox
-		case strings.Contains(ua, "windows ") || strings.Contains(ua, "microsoft-cryptoapi"):
-			u.evalWindows(ua)
-
-		// Kindle
-		case strings.Contains(ua, "kindle/") || amazonFireFingerprint.MatchString(agentPlatform):
-			u.OS.Platform = PlatformLinux
-			u.OS.Name = OSKindle
-
-		// Linux (broader attempt)
-		case strings.Contains(ua, "linux") || strings.Contains(ua, "crkey"):
-			u.evalLinux(ua, agentPlatform)
-
-		// WebOS (non-linux flagged)
-		case strings.Contains(ua, "webos") || strings.Contains(ua, "hpwos"):
-			u.OS.Platform = PlatformLinux
-			u.OS.Name = OSWebOS
-
-		// Nintendo
-		case strings.Contains(ua, "nintendo"):
-			u.OS.Platform = PlatformNintendo
-			u.OS.Name = OSNintendo
-
-		// Playstation
-		case strings.Contains(ua, "playstation") || strings.Contains(ua, "vita") || strings.Contains(ua, "psp"):
-			u.OS.Platform = PlatformPlaystation
-			u.OS.Name = OSPlaystation
-
-		// Android
-		case strings.Contains(ua, "android"):
-			u.evalLinux(ua, agentPlatform)
-
-		// Apple CFNetwork
-		case strings.Contains(ua, "cfnetwork") && strings.Contains(ua, "darwin"):
-			u.evalMacintosh(ua)
-
-		default:
-			u.OS.Platform = PlatformUnknown
-			u.OS.Name = OSUnknown
-		}
+		u.OS.Platform = PlatformUnknown
+		u.OS.Name = OSUnknown
 	}
 
-	return u.maybeBot()
+	return u.applyBotDefaults()
 }
 
-// maybeBot checks if the UserAgent is a bot and sets
-// all bot related fields if it is
-func (u *UserAgent) maybeBot() bool {
+// applyBotDefaults reports whether the agent is a bot, and if so overwrites the OS and
+// device fields with the bot defaults.
+func (u *UserAgent) applyBotDefaults() bool {
 	if u.IsBot() {
 		u.OS.Platform = PlatformBot
 		u.OS.Name = OSBot
@@ -131,487 +184,247 @@ func (u *UserAgent) maybeBot() bool {
 	return false
 }
 
-// evalLinux returns the `Platform`, `OSName` and Version of UAs with
+// parseLinux returns the `Platform`, `OSName` and Version of UAs with
 // 'linux' listed as their platform.
-func (u *UserAgent) evalLinux(ua string, agentPlatform string) {
+func (u *UserAgent) parseLinux(ua, agentPlatform string) {
 
 	switch {
 	// Kindle Fire
-	case strings.Contains(ua, "kindle") || amazonFireFingerprint.MatchString(agentPlatform):
+	case strings.Contains(ua, "kindle") || isAmazonFire(agentPlatform):
 		// get the version of Android if available, though we don't call this OSAndroid
 		u.OS.Platform = PlatformLinux
 		u.OS.Name = OSKindle
-		u.OS.Version.findVersionNumber(agentPlatform, "android ")
+		u.OS.Version.parseAfter(agentPlatform, "android ")
 
 	// Android, Kindle Fire
-	case strings.Contains(ua, "android") ||
-		strings.Contains(ua, "googletv") ||
-		strings.Contains(ua, "crkey"):
+	case strings.Contains(ua, "android") || strings.Contains(ua, "googletv"):
 		// Android
 		u.OS.Platform = PlatformLinux
 		u.OS.Name = OSAndroid
-		u.OS.Version.findVersionNumber(agentPlatform, "android ")
+		// A few old agents wrote it "Android-4.0.3".
+		u.OS.Version.parseAfter(agentPlatform, "android ", "android-")
 
 	// ChromeOS
 	case strings.Contains(ua, "cros"):
 		u.OS.Platform = PlatformLinux
 		u.OS.Name = OSChromeOS
 
+	// Tizen: Samsung's smart TVs, which report "SMART-TV; LINUX; Tizen 6.0",
+	// and the few Tizen phones, which report "Linux; Tizen 2.3".
+	case strings.Contains(ua, "tizen"):
+		u.OS.Platform = PlatformLinux
+		u.OS.Name = OSTizen
+		u.OS.Version.parseAfter(ua, "tizen ", "tizen/")
+
 	// WebOS
-	case strings.Contains(ua, "webos") || strings.Contains(ua, "hpwos"):
+	case isWebOS(ua):
 		u.OS.Platform = PlatformLinux
 		u.OS.Name = OSWebOS
 
 	// Linux, "Linux-like"
-	case strings.Contains(ua, "x11") || strings.Contains(ua, "bsd") || strings.Contains(ua, "suse") || strings.Contains(ua, "debian") || strings.Contains(ua, "ubuntu"):
-		u.OS.Platform = PlatformLinux
-		u.OS.Name = OSLinux
-
 	default:
 		u.OS.Platform = PlatformLinux
 		u.OS.Name = OSLinux
 	}
 }
 
-// evaliOS returns the `Platform`, `OSName` and Version of UAs with
-// 'ipad' or 'iphone' listed as their platform.
-func (u *UserAgent) evaliOS(uaPlatform string, agentPlatform string) {
-
+// parseiOS returns the `Platform`, `OSName` and Version of UAs with
+// 'ipad', 'iphone' or 'ipod' listed as their platform. The caller's prefix
+// check guarantees specs starts with one of the three.
+func (u *UserAgent) parseiOS(specs, agentPlatform string) {
 	switch {
-	// iPhone
-	case strings.HasPrefix(uaPlatform, "iphone"):
+	case strings.HasPrefix(specs, "iphone"):
 		u.OS.Platform = PlatformiPhone
 		u.OS.Name = OSiOS
-		u.OS.getiOSVersion(agentPlatform)
 
-	// iPad
-	case strings.HasPrefix(uaPlatform, "ipad"):
+	case strings.HasPrefix(specs, "ipad"):
 		u.OS.Platform = PlatformiPad
-		u.OS.Name = OSiOS
-		u.OS.getiOSVersion(agentPlatform)
+		u.OS.Name = OSiPadOS
 
-	// iPod
-	case strings.HasPrefix(uaPlatform, "ipod touch") || strings.HasPrefix(uaPlatform, "ipod"):
+	default: // ipod, "ipod touch" included
 		u.OS.Platform = PlatformiPod
 		u.OS.Name = OSiOS
-		u.OS.getiOSVersion(agentPlatform)
-
-	default:
-		u.OS.Platform = PlatformiPad
-		u.OS.Name = OSUnknown
 	}
+	u.OS.parseiOSVersion(agentPlatform)
 }
 
-func (u *UserAgent) evalWindowsPhone(agentPlatform string) {
+// parseiOSNative reads the OS out of an app agent that states iOS as a field of
+// its own. The model follows in the same group - "iPhone18,2", "iPad11,3" - and
+// is the only thing separating an iPhone from an iPad here.
+func (u *UserAgent) parseiOSNative(agentPlatform string) {
+	if strings.Contains(agentPlatform, "ipad") {
+		u.OS.Platform = PlatformiPad
+		u.OS.Name = OSiPadOS
+	} else {
+		u.OS.Platform = PlatformiPhone
+		u.OS.Name = OSiOS
+	}
+	u.OS.Version.parseAfter(agentPlatform, "ipados/", "ipados ", "ios ", "ios/")
+}
+
+// isWebOS covers the three spellings in the wild: Palm and HP's original
+// "webOS" and "hpwOS", and the "Web0S" - with a zero - that LG ships on its
+// smart TVs.
+func isWebOS(ua string) bool {
+	return strings.Contains(ua, "webos") ||
+		strings.Contains(ua, "web0s") ||
+		strings.Contains(ua, "hpwos")
+}
+
+// parseTvOSVersion reads the tvOS version, which sits after the slash that
+// follows the hardware generation: "AppleTV6,2/11.1", "AppleTV/1.1". The media
+// player agents carry no model and state the version the iOS way instead.
+func (u *UserAgent) parseTvOSVersion(ua string) {
+	if _, after, ok := strings.Cut(ua, "appletv"); ok {
+		if _, version, ok := strings.Cut(after, "/"); ok && u.OS.Version.parse(version) {
+			return
+		}
+	}
+	u.OS.Version.parseAfter(ua, "cpu os ", "os x ")
+}
+
+func (u *UserAgent) parseWindowsPhone(agentPlatform string) {
 	u.OS.Platform = PlatformWindowsPhone
 
-	if u.OS.Version.findVersionNumber(agentPlatform, "windows phone os ") || u.OS.Version.findVersionNumber(agentPlatform, "windows phone ") {
+	if u.OS.Version.parseAfter(agentPlatform, "windows phone os ", "windows phone ") {
 		u.OS.Name = OSWindowsPhone
 	} else {
 		u.OS.Name = OSUnknown
 	}
 }
 
-func (u *UserAgent) evalWindows(ua string) {
-
-	switch {
-	//Xbox -- it reads just like Windows
-	case strings.Contains(ua, "xbox") || strings.Contains(ua, "Xbox One"):
+func (u *UserAgent) parseWindows(ua string) {
+	// Xbox -- it reads just like Windows
+	if strings.Contains(ua, "xbox") {
 		u.OS.Platform = PlatformXbox
 		u.OS.Name = OSXbox
-		if !u.OS.Version.findVersionNumber(ua, "windows phone ") {
-			if !u.OS.Version.findVersionNumber(ua, "windows nt ") {
-				u.OS.Version.Major = 6
-				u.OS.Version.Minor = 0
-				u.OS.Version.Patch = 0
-			}
+		if !u.OS.Version.parseAfter(ua, "windows phone ", "windows nt ") {
+			u.OS.Version = Version{Major: 6}
 		}
+		return
+	}
 
-	// No windows version
-	case !strings.Contains(ua, "windows "):
-		u.OS.Platform = PlatformWindows
-		u.OS.Name = OSUnknown
-
-	case strings.Contains(ua, "windows nt ") && u.OS.Version.findVersionNumber(ua, "windows nt "):
-		u.OS.Platform = PlatformWindows
+	u.OS.Platform = PlatformWindows
+	switch {
+	case u.OS.Version.parseAfter(ua, "windows nt "):
 		u.OS.Name = OSWindows
 
 	case strings.Contains(ua, "windows xp"):
-		u.OS.Platform = PlatformWindows
 		u.OS.Name = OSWindows
-		u.OS.Version.Major = 5
-		u.OS.Version.Minor = 1
-		u.OS.Version.Patch = 0
+		u.OS.Version = Version{Major: 5, Minor: 1}
 
-	default:
-		u.OS.Platform = PlatformWindows
+	default: // no windows version at all, microsoft-cryptoapi included
 		u.OS.Name = OSUnknown
-
 	}
 }
 
-func (u *UserAgent) evalMacintosh(uaPlatformGroup string) {
+// parseMacintosh takes the whole agent rather than the platform group: the
+// "os x " marker and the CFNetwork path that also calls this both need it.
+func (u *UserAgent) parseMacintosh(ua string, hints *Hints) {
 	u.OS.Platform = PlatformMac
-	if i := strings.Index(uaPlatformGroup, "os x "); i != -1 {
+	// "os x " for the long-standing spelling, "macos " for the one Apple has
+	// started sending: "(Macintosh; Apple macOS 15_7_3)".
+	after, ok := cutAfter(ua, "os x ", "macos ")
+	if ok {
 		u.OS.Name = OSMacOSX
-		u.OS.Version.parse(uaPlatformGroup[i+5:])
+		u.OS.Version.parse(after)
+
+		if hints != nil && hints.ScreenSize != nil && hints.ScreenSize.isiPad() {
+			u.OS.Name = OSiPadOS
+			u.OS.Platform = PlatformiPad
+		}
 
 		return
 	}
 	u.OS.Name = OSUnknown
 }
 
-func (v *Version) findVersionNumber(s string, versionPrefix string) bool {
-	if ind := strings.Index(s, versionPrefix); ind != -1 {
-		// Given `s` as "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.101.5 Safari/537.36",
-		// and `versionPrefix` as "Chrome/",
-		// then `ind` is 75,
-		// then `s[ind+len(versionPrefix):]` will become "30.0.1599.101.5 Safari/537.36"
-		versionString := s[ind+len(versionPrefix):]
-		// Trim any words after the version number.
-		// For example, given "30.0.1599.101.5 Safari/537.36", we want to trim it to "30.0.1599.101.5"
-		{
-			ss := strings.Split(versionString, " ")
-			if len(ss) > 0 {
-				versionString = ss[0]
-			}
+// cutAfter returns the text following the first of markers that appears in s.
+func cutAfter(s string, markers ...string) (string, bool) {
+	for _, m := range markers {
+		if _, after, ok := strings.Cut(s, m); ok {
+			return after, true
 		}
-		// Trim the version string of any trailing characters that are not part of the version number
-		versionString = strings.TrimRight(versionString, ":;.,/\\")
-		{
-			ss := strings.Split(versionString, ".")
-			// If there are more than 3 parts to the version number, then the last part is the label.
-			if len(ss) > 3 {
-				v.Extra = strings.Join(ss[3:], ".")
+	}
+	return "", false
+}
+
+// parseAfter parses the version following the first of markers that appears in
+// s, trying each marker in order, and stores it on v. It reports whether one
+// parsed.
+func (v *Version) parseAfter(s string, markers ...string) bool {
+	for _, m := range markers {
+		if _, after, ok := strings.Cut(s, m); ok && v.parse(after) {
+			version := strings.TrimRight(strings.Fields(after)[0], ":;.,/\\")
+			if parts := strings.Split(version, "."); len(parts) > 3 {
+				v.Extra = strings.Join(parts[3:], ".")
+			} else {
+				v.Extra = ""
 			}
+			return true
 		}
-		return v.parse(versionString)
 	}
 	return false
 }
 
-// getiOSVersion accepts the platform portion of a UA string and returns
-// a Version.
-func (o *OS) getiOSVersion(uaPlatformGroup string) {
-	if i := strings.Index(uaPlatformGroup, "cpu iphone os "); i != -1 {
-		o.Version.parse(uaPlatformGroup[i+14:])
-		return
-	}
-
-	if i := strings.Index(uaPlatformGroup, "cpu os "); i != -1 {
-		o.Version.parse(uaPlatformGroup[i+7:])
-		return
-	}
-
-	o.Version.parse(uaPlatformGroup)
-}
-
-// resolveFrozenIOSVersion replaces a frozen iOS-family version with the release
-// it can be recovered from, and marks it when it cannot. The numbers stated in the
-// user agent are kept either way, so a caller never loses the value; the marker
-// says it is a constant rather than a measurement.
-func resolveFrozenIOSVersion(ua, agentPlatform string, version *Version) {
-	if !hasAnyFrozenIOSVersionToken(agentPlatform) {
-		return
-	}
-
-	// Safari is tied to iOS releases, so its Version/ token is the best
-	// available iOS version once the platform token is frozen. Reuse the normal
-	// browser classifier so WKWebViews, in-app browsers and named third-party
-	// browsers cannot be mistaken for full Safari.
-	candidate := UserAgent{}
-	candidate.evalBrowserName(ua)
-	if candidate.Browser.Name == BrowserSafari {
-		var safariVersion Version
-		if safariVersion.findVersionNumber(ua, "version/") && safariVersion.Major >= 26 {
-			// Extra belongs to Safari's version token. The OS version has only
-			// three numeric components; VersionFrozen is its sole Extra value.
-			safariVersion.Extra = ""
-			*version = safariVersion
-			return
-		}
-	}
-
-	version.Extra = VersionFrozen
-}
-
-// markFrozenMacOSVersion flags a capped desktop version. Nothing can be recovered
-// here, because one Safari release serves several macOS versions and the other
-// browsers cap the token without offering a usable version of their own, so the
-// value is only marked. See MinimumMacOSVersion for the lower bound that can still
-// be derived.
-func markFrozenMacOSVersion(ua string, version *Version) {
-	candidate := UserAgent{}
-	candidate.evalBrowserName(ua)
-	candidate.evalBrowserVersion(ua)
-
-	if hasFrozenMacOSVersion(ua, candidate.Browser) {
-		version.Extra = VersionFrozen
+// parseiOSVersion reads the iOS version out of the platform group and stores
+// it on o.
+func (o *OS) parseiOSVersion(agentPlatform string) {
+	// "ipados/16.6" reaches here through the strict ipad prefix above, and its
+	// version sits where no "cpu os" field does.
+	if !o.Version.parseAfter(agentPlatform, "cpu iphone os ", "cpu os ", "ipados/", "ipados ") {
+		o.Version.parse(agentPlatform)
 	}
 }
 
-// IsFrozenOSVersion reports whether the OS version Parse returns for this user
-// agent is a constant the browser sends for every release, rather than the
-// system in front of the user. When it is true, treat OS.Version as unknown.
+// maxVersionPart caps each component of a version.
 //
-// Apple and Google cap the platform token they report. A Mac running macOS 26
-// and one running macOS 11 therefore send the same value. The browser version
-// proves the value cannot be genuine only after that browser drops Catalina:
+// Nothing has ever shipped a version number this large, and accumulating one
+// unchecked overflows: FuzzParse found "roku/10000000000000000000", which gave a
+// negative major that then compares as older than every release there has been.
+// The cap is also small enough that the multiply below cannot overflow an int on
+// a 32 bit platform.
+const maxVersionPart = 1 << 24
+
+// parse reads major, minor and patch off the front of str and stores them on v,
+// overwriting all three. It reports whether str began with a digit at all, which
+// is how the callers tell a marker worth following from one that led nowhere.
 //
-//	Safari  16 and later, since Catalina supports no Safari beyond 15.6
-//	Chrome  129 and later, since Catalina supports no Chrome beyond 128
+// A component is the run of digits at the current position, and whatever single
+// byte ended that run is the separator: agents write a version as "126.0.6478",
+// as Apple's underscored "10_15_7", and with the run simply ending where the
+// next field begins - "4.0 mobile safari" is {4, 0, 0}. A component that starts
+// on a non-digit is zero, so a short version fills the rest with zeroes.
 //
-// Firefox has capped its token at 10.15 since version 87, but still supports
-// Catalina. Its token may therefore be genuine and is deliberately not marked.
-//
-// On the iOS family WebKit hardcodes the token for every client, so any of the
-// frozen values counts, whatever browser sent it. Note that those values are also
-// real iOS releases: a device genuinely running 18.7 is reported as frozen too,
-// because the two cannot be told apart.
-//
-// The value is about the user agent, not about a particular call: for an iOS user
-// agent that states full Safari 26 or later, Parse(ua, true) can replace the frozen
-// token with the release recovered from the Safari version, and this function
-// still reports the token itself as frozen.
-//
-// A false result means the version is either genuine or not provably frozen, not
-// that it is guaranteed to be accurate.
-func IsFrozenOSVersion(rawUserAgent string) bool {
-	ua, parsed := parseOSVersionInput(rawUserAgent)
-	return isFrozenOSVersion(ua, parsed)
-}
-
-func isFrozenOSVersion(ua string, parsed *UserAgent) bool {
-	switch parsed.OS.Name {
-	case OSiOS:
-		return hasAnyFrozenIOSVersionToken(ua)
-
-	case OSMacOSX:
-		return hasFrozenMacOSVersion(ua, parsed.Browser)
-
-	default:
-		return false
-	}
-}
-
-// safariMacOSFloors maps a Safari major release to the oldest macOS version it
-// was offered for. Safari on the Mac ships for the current system and the two
-// before it, so its version does not identify a single release, but it does rule
-// out everything older than the entry here.
-//
-// The values come from the overview of Apple's Safari release notes, for example
-// Safari 26 being available for macOS 26, macOS Sequoia and macOS Sonoma.
-//
-// Releases before 16 are absent on purpose: their floor is at or below the
-// capped token itself, so it would add nothing. There is no formula behind these
-// numbers, and the jump from macOS 15 to macOS 26 shows why, so a new Safari
-// generation needs a new entry here.
-var safariMacOSFloors = []struct {
-	safariMajor int
-	macOS       Version
-}{
-	{16, Version{Major: 11}}, // Big Sur, Monterey, Ventura
-	{17, Version{Major: 12}}, // Monterey, Ventura, Sonoma
-	{18, Version{Major: 13}}, // Ventura, Sonoma, macOS 15
-	{26, Version{Major: 14}}, // Sonoma, Sequoia, macOS 26
-}
-
-// MinimumMacOSVersion returns the oldest macOS release that could be behind this
-// user agent, or the zero Version when no bound can be derived. The result is
-// separate metadata: it is not stored in OS.Version.Extra and this function does
-// not modify a UserAgent returned by Parse.
-//
-// It exists because the macOS version in a user agent is capped and therefore
-// useless on its own, while Safari's own version still carries information: a
-// given Safari release runs on at most three macOS versions, so the oldest of
-// them is a floor that cannot be wrong. Safari 26.5 means macOS 14 or newer.
-//
-// The result is deliberately a floor, not a guess. Deriving an exact version by
-// subtracting a constant from the Safari version is wrong twice over: it ignores
-// that Safari ships for two older systems, and the year-based renumbering in 2025
-// broke any fixed offset.
-//
-// The zero Version is returned for anything that carries no such hint: other
-// browsers, which cap the token without a usable version of their own, and Safari
-// before 16, whose floor would be older than the capped token anyway. A Safari
-// generation newer than the newest known entry falls back to that entry, which
-// stays a valid floor.
-//
-// An iPad requesting a desktop site can send a UA indistinguishable from a
-// Mac. The result is therefore a macOS floor only if the request actually came
-// from a Mac. If a Mobile/ token makes the iPad origin visible, zero is returned.
-func MinimumMacOSVersion(rawUserAgent string) Version {
-	ua, parsed := parseOSVersionInput(rawUserAgent)
-	return minimumMacOSVersion(ua, parsed)
-}
-
-func minimumMacOSVersion(ua string, parsed *UserAgent) Version {
-	if parsed.OS.Name != OSMacOSX || parsed.Browser.Name != BrowserSafari || strings.Contains(ua, "mobile/") {
-		return Version{}
-	}
-
-	floor := Version{}
-	for _, entry := range safariMacOSFloors {
-		if parsed.Browser.Version.Major >= entry.safariMajor {
-			floor = entry.macOS
-		}
-	}
-	return floor
-}
-
-// ParseOSVersionDetails returns the OS version stated in rawUserAgent together
-// with any independently derivable macOS floor and its frozen-token status.
-//
-// Reported is identical to Parse(rawUserAgent).OS.Version: it is never resolved
-// from Safari's version and never receives VersionFrozen in Extra. Use
-// Parse(rawUserAgent, true) when the opt-in resolved-or-marked representation is
-// wanted instead. Minimum and Frozen have the same semantics as
-// MinimumMacOSVersion and IsFrozenOSVersion.
-func ParseOSVersionDetails(rawUserAgent string) OSVersionDetails {
-	ua, parsed := parseOSVersionInput(rawUserAgent)
-	return OSVersionDetails{
-		Reported: parsed.OS.Version,
-		Minimum:  minimumMacOSVersion(ua, parsed),
-		Frozen:   isFrozenOSVersion(ua, parsed),
-	}
-}
-
-func parseOSVersionInput(rawUserAgent string) (string, *UserAgent) {
-	ua := normalise(rawUserAgent)
-	parsed := new(UserAgent)
-	parse(ua, parsed, false)
-	return ua, parsed
-}
-
-func hasAnyFrozenIOSVersionToken(ua string) bool {
-	return hasFrozenIOSVersionToken(ua, "18_6") ||
-		hasFrozenIOSVersionToken(ua, "18_6_2") ||
-		hasFrozenIOSVersionToken(ua, "18_7")
-}
-
-func hasFrozenMacOSVersion(ua string, browser Browser) bool {
-	// WebKit and Chromium use exactly this underscore-separated cap. Read it
-	// from the platform group rather than matching arbitrary text elsewhere.
-	if macOSVersionToken(ua) != "10_15_7" {
-		return false
-	}
-
-	switch browser.Name {
-	case BrowserSafari:
-		return browser.Version.Major >= 16
-	case BrowserChrome:
-		return browser.Version.Major >= 129
-	default:
-		return false
-	}
-}
-
-func macOSVersionToken(ua string) string {
-	start := strings.IndexByte(ua, '(')
-	if start == -1 {
-		return ""
-	}
-	end := strings.IndexByte(ua[start+1:], ')')
-	if end == -1 {
-		return ""
-	}
-	platform := ua[start+1 : start+1+end]
-	const prefix = "mac os x "
-	index := strings.Index(platform, prefix)
-	if index == -1 {
-		return ""
-	}
-	fields := strings.Fields(platform[index+len(prefix):])
-	if len(fields) == 0 {
-		return ""
-	}
-	return strings.TrimRight(fields[0], ";")
-}
-
-func hasFrozenIOSVersionToken(agentPlatform, version string) bool {
-	return strings.Contains(agentPlatform, "cpu iphone os "+version+" like mac os x") ||
-		strings.Contains(agentPlatform, "cpu os "+version+" like mac os x")
-}
-
-// strToInt simply accepts a string and returns a `int`,
-// with '0' being default.
-func strToInt(str string) int {
-	i, _ := strconv.Atoi(str)
-	return i
-}
-
-// parse accepts a string and returns a Version,
-// with {0, 0, 0, ""} being default.
+// The one rule that does not fall out of that is zero padding, and it is load
+// bearing: a component written "08" is read as 0 followed by 8 in the next
+// place, so "4.08" is {4, 0, 8}. That keeps the padded releases of the era that
+// wrote them distinct from the bare ones - Netscape 4.08 from 4.8, Opera 9.01
+// from 9.1 - which a single numeric reading of "08" would collapse.
 func (v *Version) parse(str string) bool {
-	// This checks if the string is empty or if the first character of the string is not a digit.
-	if len(str) == 0 || str[0] < '0' || str[0] > '9' {
+	if len(str) == 0 || !isDigit(str[0]) {
 		return false
 	}
-
-	// This is a for loop that iterates three times, with i starting from 0 and incrementing by 1 each time.
-	// Within this loop, another for loop is started that iterates over each character c in the str string, along with its index k.
-	for i := 0; i < 3; i++ {
-		empty := true
-		val := 0
-		strLen := len(str) - 1
-
-		for k, c := range str {
-			// If the current character c is a digit, then the if empty block is executed.
-			// If empty is true, val is set to the numeric value of c and empty is set to false.
-			if c >= '0' && c <= '9' {
-				if empty {
-					val = int(c) - 48
-					empty = false
-					// If the current character is the last character in the string, then the str variable is set to an empty string.
-					if k == strLen {
-						str = str[:0]
-					}
-					continue
-				}
-				// then str is set to the substring starting from index k,
-				// and the loop is exited using the break statement.
-
-				// If val is zero and the current character is 0.
-				if val == 0 {
-					if c == '0' {
-						// If the current character is the last character in the string, then str is set to an empty string.
-						if k == strLen {
-							str = str[:0]
-						}
-						continue
-					}
-					str = str[k:]
-					break
-				}
-
-				// If val is not zero and the current character is a digit,
-				// then val is updated by multiplying it by 10 and adding the numeric value of the current character.
-				val = 10*val + int(c) - 48
-				// If the current character is the last character in the string,
-				// then str is set to an empty string.
-				if k == strLen {
-					str = str[:0]
-				}
-				continue
+	var parts [3]int
+	for i := range parts {
+		padded := len(str) > 0 && str[0] == '0'
+		n := 0
+		for n < len(str) && isDigit(str[n]) {
+			if padded && str[n] != '0' {
+				break // the non-zero digit belongs to the next component
 			}
-
-			// From here, the current character is not a digit.
-			// Else, the str is set to the substring starting from index k+1,
-			str = str[k+1:]
-			break
+			// Capped rather than wrapped; see maxVersionPart.
+			if parts[i] <= maxVersionPart {
+				parts[i] = 10*parts[i] + int(str[n]-'0')
+			}
+			n++
 		}
-
-		switch i {
-		case 0:
-			v.Major = val
-
-		case 1:
-			v.Minor = val
-
-		case 2:
-			v.Patch = val
+		if n < len(str) && padded && isDigit(str[n]) {
+			str = str[n:] // no separator to step over, the digit starts it
+		} else {
+			str = str[min(n+1, len(str)):]
 		}
 	}
-
+	v.Major, v.Minor, v.Patch = parts[0], parts[1], parts[2]
 	return true
 }

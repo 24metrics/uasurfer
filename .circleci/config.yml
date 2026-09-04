@@ -14,6 +14,7 @@ jobs:
           command: |
             # use http api token to fetch private repos
             git config --global url."https://${GITHUB_API_TOKEN}:x-oauth-basic@github.com/24metrics".insteadOf "https://github.com/24metrics"
+            git config --global url."https://${GITHUB_API_TOKEN}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
 
       - checkout
 
@@ -29,7 +30,7 @@ jobs:
       - run:
           name: Lint
           command: |
-            golangci-lint run -v ./...  -D unused
+            go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run ./...
 
       - run:
           name: Test 
