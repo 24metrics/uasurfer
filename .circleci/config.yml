@@ -30,7 +30,7 @@ jobs:
       - run:
           name: Lint
           command: |
-            golangci-lint run -v ./...  -D unused
+            go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2 run ./...
 
       - run:
           name: Test 
